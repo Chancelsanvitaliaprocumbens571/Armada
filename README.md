@@ -11,7 +11,7 @@
 
 ---
 
-## Virus Total wrote about us..
+## VirusTotal wrote about us..
 
 > "This ELF binary is a sophisticated Linux botnet agent, likely a variant of the Mirai or Gafgyt families, featuring DDoS capabilities, credential brute-forcing, and rootkit functionality. It establishes persistence through multiple vectors: creating systemd services, modifying crontabs, and implementing an LD_PRELOAD rootkit by dropping a shared object to '/usr/lib/libproc.so' and modifying '/etc/ld.so.preload'. The sample contains a command-and-control (C2) dispatcher supporting commands for various DDoS attacks (TCP, UDP, HTTP, DNS floods), SOCKS proxying, and remote shell execution. It includes a built-in Telnet/SSH brute-forcer with a hardcoded credential list and anti-honeypot checks (searching for 'cowrie' and 'kippo' paths). Additionally, it attempts to disable system watchdogs and sets its OOM score to prevent termination by the kernel."
 
