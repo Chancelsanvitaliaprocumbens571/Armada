@@ -1,0 +1,7 @@
+#!/bin/bash
+args=()
+for arg in "$@"; do
+    [ "$arg" = "-EB" ] && continue
+    args+=("$arg")
+done
+exec /etc/xcompile/mips/bin/mips-as "${args[@]}"

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>403</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;min-height:100vh;display:flex;justify-content:center;align-items:center;font-family:'Segoe UI',system-ui,sans-serif;outline:none}
+.gate{opacity:0;transition:opacity .6s ease;pointer-events:none;text-align:center}
+.gate.open{opacity:1;pointer-events:auto}
+.card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:40px;width:380px;box-shadow:0 8px 32px rgba(0,0,0,0.4)}
+h1{color:#a371f7;font-size:20px;margin-bottom:24px;letter-spacing:3px}
+input{width:100%;padding:12px 14px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:16px;font-family:monospace;letter-spacing:2px;outline:none;text-align:center;transition:border-color .2s}
+input:focus{border-color:#a371f7}
+.msg{margin-top:14px;font-size:13px;color:#484f58;min-height:20px}
+.msg.err{color:#f85149}
+.msg.ok{color:#3fb950}
+</style>
+</head>
+<body tabindex="0">
+<div class="gate" id="gate">
+<div class="card">
+<h1>&#9790;&#8483;&#9790;</h1>
+<input type="text" id="login-user" placeholder="Username" autocomplete="off" spellcheck="false" style="margin-bottom:10px">
+<input type="password" id="login-pass" placeholder="Password" autocomplete="off" spellcheck="false">
+<div class="msg" id="msg"></div>
+</div>
+</div>
+<script>
+(function(){
+  var count=0,timer=null,NEED=10,TIMEOUT=20000;
+  var gate=document.getElementById('gate');
+  var msg=document.getElementById('msg');
+  var userInp=document.getElementById('login-user');
+  var passInp=document.getElementById('login-pass');
+
+  function reset(){count=0;clearTimeout(timer);timer=null}
+
+  document.addEventListener('keydown',function(e){
+    if(gate.classList.contains('open'))return;
+    if(e.key!==' ')return;
+    e.preventDefault();
+    count++;
+    if(count===1){
+      timer=setTimeout(function(){reset()},TIMEOUT);
+    }
+    if(count>=NEED){
+      clearTimeout(timer);
+      gate.classList.add('open');
+      setTimeout(function(){userInp.focus()},100);
+    }
+  });
+
+  function doLogin(){
+    var u=userInp.value.trim();
+    var p=passInp.value;
+    if(!u.length||!p.length) return;
+    msg.textContent='';msg.className='msg';
+    fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})})
+    .then(function(r){return r.json().then(function(d){return{ok:r.ok,data:d}})})
+    .then(function(res){
+      if(res.data.success){
+        msg.textContent='Access granted';msg.className='msg ok';
+        setTimeout(function(){window.location='/'},500);
+      }else{
+        msg.textContent=res.data.error||'Denied';msg.className='msg err';
+        passInp.value='';
+      }
+    })
+    .catch(function(){msg.textContent='Error';msg.className='msg err'});
+  }
+
+  passInp.addEventListener('keydown',function(e){
+    if(e.key==='Enter') doLogin();
+  });
+
+  userInp.addEventListener('keydown',function(e){
+    if(e.key==='Enter') passInp.focus();
+  });
+
+  document.body.focus();
+})();
+</script>
+</body>
+</html>
