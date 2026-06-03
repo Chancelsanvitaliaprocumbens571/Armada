@@ -23,7 +23,7 @@
 
 ## Overview
 
-Armada is a complete fleet management framework -- agent, C2 server, relay network, web panel, and automated deployment. The agent is written in pure C with zero external dependencies and compiles to a single ~80KB static binary across 14 architectures, from MIPS routers to x86 servers.
+> Armada is a complete fleet management framework -- agent, C2 server, relay network, web panel, and automated deployment. The agent is written in pure C with zero external dependencies and compiles to a single ~80KB static binary across 14 architectures, from MIPS routers to x86 servers.
 ---
 
 ## Setup
