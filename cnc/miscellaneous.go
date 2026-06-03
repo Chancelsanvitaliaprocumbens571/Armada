@@ -459,7 +459,7 @@ func getOriginMap() map[string]int {
 	return originMap
 }
 
-// showBanner displays the Armada ASCII art banner with live statistics
+// showBanner displays the Vision ASCII art banner with live statistics
 
 func showBanner(conn net.Conn) {
 	RenderMainBanner(conn)
@@ -557,7 +557,7 @@ func RenderLockout(conn net.Conn) {
 	time.Sleep(2 * time.Second)
 }
 
-// RenderMainBanner shows the Armada banner
+// RenderMainBanner shows the Vision banner
 func RenderMainBanner(conn net.Conn) {
 	conn.Write([]byte(ClearScreen))
 	conn.Write([]byte("\r\n"))

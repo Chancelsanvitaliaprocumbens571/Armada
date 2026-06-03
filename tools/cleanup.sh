@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# Armada - Bot Persistence Cleanup
+# Vision - Bot Persistence Cleanup
 # ============================================================================
 # Removes ALL persistence artifacts created by the bot on the local machine.
 # Handles both old (Makefile) and new (build.sh) binary naming conventions,
@@ -29,7 +29,7 @@ fi
 
 echo ""
 echo -e "${RED}╔══════════════════════════════════════════════════╗${NC}"
-echo -e "${RED}║${NC}   Armada Bot Persistence Cleanup                 ${RED}║${NC}"
+echo -e "${RED}║${NC}   Bot Persistence Cleanup                        ${RED}║${NC}"
 echo -e "${RED}╚══════════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -105,9 +105,9 @@ for dir in "${CUR_HIDDEN_DIR}" "${OLD_HIDDEN_DIR}" "/dev/shm"; do
     done
 done
 
-# Kill from Armada dirs
-if pgrep -f "Armada/bins/" > /dev/null 2>&1; then
-    pkill -9 -f "Armada/bins/" && ok "Killed processes from Armada/bins/" && KILLED=$((KILLED+1))
+# Kill from Vision dirs
+if pgrep -f "Vision/bins/" > /dev/null 2>&1; then
+    pkill -9 -f "Vision/bins/" && ok "Killed processes from Vision/bins/" && KILLED=$((KILLED+1))
 fi
 
 [ $KILLED -eq 0 ] && skip "No running bot processes found"

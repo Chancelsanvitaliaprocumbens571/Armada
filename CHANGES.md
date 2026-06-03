@@ -157,17 +157,17 @@ Proxy Client (curl / browser / app)
         ▼
    Relay Server :1080  (public IP)
         │
-        │  VPE2 encrypted TCP (X25519 + ChaCha20)
+        │  EZF3 encrypted TCP (X25519 + ChaCha20)
         ▼
    Bot (backconnect)  →  Target Website
 ```
 
 **Control channel protocol:**
 ```
-Bot  →  Relay :9001   "RELAY_AUTH:<key>:<botID>\n"   (VPE2 encrypted)
+Bot  →  Relay :9001   "RELAY_AUTH:<key>:<botID>\n"   (EZF3 encrypted)
 Relay →  Bot          "RELAY_OK\n"
 Relay →  Bot          "RELAY_NEW:<sessionID>\n"        (new client waiting)
-Bot  →  Relay :9001   "RELAY_DATA:<sessionID>\n"       (data channel, VPE2 encrypted)
+Bot  →  Relay :9001   "RELAY_DATA:<sessionID>\n"       (data channel, EZF3 encrypted)
 Bot runs full SOCKS5 server over data channel
 ```
 

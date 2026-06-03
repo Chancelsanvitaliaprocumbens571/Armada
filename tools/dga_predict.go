@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const configSeed = "e5a7cf2d"
+const configSeed = "8e1ac3a7"
 const dgaDomainsPerDay = 20
 const dgaTLD = ".xyz"
 

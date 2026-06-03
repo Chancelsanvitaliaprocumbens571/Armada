@@ -69,7 +69,7 @@ func (m launcherModel) View() string {
 	titleText := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("93")).
 		Bold(true).
-		Render("☾℣☽ Armada")
+		Render("☾℣☽ Vision")
 
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).

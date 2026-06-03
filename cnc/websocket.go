@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -113,30 +114,51 @@ func forwardBotOutputToWebShells(botID, output string) {
 
 	// Check for __FILE_START__<filename>
 	if strings.HasPrefix(trimmed, "__FILE_START__") {
-		fname := strings.TrimPrefix(trimmed, "__FILE_START__")
-		webShellFileAccumLock.Lock()
-		webShellFileAccum[botID] = &fileAccum{name: fname}
-		webShellFileAccumLock.Unlock()
-		// Send a small status message to the terminal
-		sendWebShellOutput(botID, "[download] receiving file: "+fname+"...\n")
+		rest := strings.TrimPrefix(trimmed, "__FILE_START__")
+		// Bot sends the complete file as one framed message:
+		//   __FILE_START__<name>\n<base64>\n__FILE_END__
+		// Detect and handle it inline rather than via accumulation.
+		nlIdx := strings.Index(rest, "\n")
+		if nlIdx < 0 {
+			nlIdx = len(rest)
+		}
+		fname := rest[:nlIdx]
+		payload := ""
+		if nlIdx < len(rest) {
+			payload = rest[nlIdx+1:]
+		}
+		endMarker := "\n__FILE_END__"
+		endIdx := strings.Index(payload, endMarker)
+		if endIdx >= 0 {
+			// Complete file in one shot
+			b64data := strings.TrimSpace(payload[:endIdx])
+			sendWebShellFile(botID, fname, b64data)
+		} else {
+			// Multi-message streaming (future compat)
+			webShellFileAccumLock.Lock()
+			webShellFileAccum[botID] = &fileAccum{name: fname}
+			if payload != "" {
+				webShellFileAccum[botID].data.WriteString(payload)
+			}
+			webShellFileAccumLock.Unlock()
+			sendWebShellOutput(botID, "[download] receiving "+fname+"...\n")
+		}
 		return
 	}
 
-	// Check for __FILE_END__
+	// Check for __FILE_END__ (multi-message path)
 	if trimmed == "__FILE_END__" {
 		webShellFileAccumLock.Lock()
 		accum := webShellFileAccum[botID]
 		delete(webShellFileAccum, botID)
 		webShellFileAccumLock.Unlock()
-
 		if accum != nil {
-			// Send file message to all web shell connections
 			sendWebShellFile(botID, accum.name, accum.data.String())
 		}
 		return
 	}
 
-	// If we are accumulating a file, append data instead of displaying
+	// If we are accumulating a file, append data
 	webShellFileAccumLock.Lock()
 	accum := webShellFileAccum[botID]
 	webShellFileAccumLock.Unlock()
@@ -168,6 +190,30 @@ func sendWebShellOutput(botID, output string) {
 		"botID":  botID,
 		"output": output,
 	}
+
+	var dead []*safeWS
+	for _, ws := range snapshot {
+		if err := ws.writeJSON(msg); err != nil {
+			dead = append(dead, ws)
+		}
+	}
+	for _, ws := range dead {
+		unregisterWebShell(botID, ws)
+		ws.conn.Close()
+	}
+}
+
+// sendWebShellStreamMsg sends a structured streaming message to all web shell connections.
+func sendWebShellStreamMsg(botID string, msg map[string]interface{}) {
+	webShellConnsLock.RLock()
+	conns := webShellConns[botID]
+	if len(conns) == 0 {
+		webShellConnsLock.RUnlock()
+		return
+	}
+	snapshot := make([]*safeWS, len(conns))
+	copy(snapshot, conns)
+	webShellConnsLock.RUnlock()
 
 	var dead []*safeWS
 	for _, ws := range snapshot {
@@ -241,10 +287,8 @@ func handleWebShellWS(w http.ResponseWriter, r *http.Request) {
 
 	ws := &safeWS{conn: wsConn}
 	registerWebShell(botID, ws)
-	// Reset cwd for fresh shell session
-	webShellCwdLock.Lock()
-	delete(webShellCwd, botID)
-	webShellCwdLock.Unlock()
+	// Intentionally do NOT reset webShellCwd here — cwd persists across
+	// shell open/close for session continuity.
 	defer func() {
 		unregisterWebShell(botID, ws)
 		wsConn.Close()
@@ -262,6 +306,7 @@ func handleWebShellWS(w http.ResponseWriter, r *http.Request) {
 			Type     string `json:"type"`
 			FileName string `json:"fileName"`
 			Data     string `json:"data"`
+			Stream   bool   `json:"stream"`
 		}
 		if err := json.Unmarshal(msgBytes, &msg); err != nil {
 			continue
@@ -274,14 +319,29 @@ func handleWebShellWS(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// Handle PTY open request
+		if msg.Type == "pty_open" {
+			sendToSingleBot(botID, "!pty")
+			continue
+		}
+
+		// Handle PTY keyboard input (data is raw text from xterm.js)
+		// Must base64-encode because raw \r \n \x00 get corrupted by TrimSpace/strlen
+		if msg.Type == "pty_input" && msg.Data != "" {
+			b64 := base64.StdEncoding.EncodeToString([]byte(msg.Data))
+			sendToSingleBot(botID, "!ptydata "+b64)
+			continue
+		}
+
 		cmd := strings.TrimSpace(msg.Command)
 		if cmd == "" {
 			continue
 		}
 
-		// Auto-prefix with !shell for non-! commands (mirrors TUI behavior)
+		// Auto-prefix with !shell or !stream for non-! commands
 		if !strings.HasPrefix(cmd, "!") {
 			// Track cd commands to maintain working directory across stateless shells
+			// cd always uses blocking !shell so pwd output can update cwd tracking
 			if strings.HasPrefix(cmd, "cd ") || cmd == "cd" {
 				dir := strings.TrimSpace(strings.TrimPrefix(cmd, "cd"))
 				if dir == "" || dir == "~" {
@@ -295,6 +355,8 @@ func handleWebShellWS(w http.ResponseWriter, r *http.Request) {
 				var cdCmd string
 				if cur != "" {
 					cdCmd = "cd " + shellQuote(cur) + " && cd " + shellQuote(dir) + " && pwd"
+				} else if dir != "" && dir[0] != '/' && dir[0] != '$' {
+					cdCmd = "cd / && cd " + shellQuote(dir) + " && pwd"
 				} else {
 					cdCmd = "cd " + shellQuote(dir) + " && pwd"
 				}
@@ -308,10 +370,15 @@ func handleWebShellWS(w http.ResponseWriter, r *http.Request) {
 				webShellCwdLock.RLock()
 				cwd := webShellCwd[botID]
 				webShellCwdLock.RUnlock()
+				// Use !stream for streaming output when client requests it
+				prefix := "!shell "
+				if msg.Stream {
+					prefix = "!stream "
+				}
 				if cwd != "" {
-					cmd = "!shell cd " + shellQuote(cwd) + " && " + cmd
+					cmd = prefix + "cd " + shellQuote(cwd) + " && " + cmd
 				} else {
-					cmd = "!shell " + cmd
+					cmd = prefix + cmd
 				}
 			}
 		}

