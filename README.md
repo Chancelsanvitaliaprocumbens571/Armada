@@ -5,10 +5,7 @@
                                              /    |    \  | \/  Y Y  \/ __ \_/ /_/ | / __ \_
                                              \____|__  /__|  |__|_|  (____  /\____ |(____  /
                                                      \/            \/     \/      \/     \/
-                              1. a fleet of warships 2. a large force or group usually of moving things               
-                                               ============================================
-                                                  Not Mirai, Not Even Close  |  PURE C
-                                               ============================================
+                                  1. a fleet of warships 2. a large force or group usually of moving things               
 ```
 
 <p align="center">
