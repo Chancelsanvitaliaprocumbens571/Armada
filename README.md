@@ -1,5 +1,4 @@
-# Armada
-> A fleet of warships 
+# Armada -- A fleet of warships 
 
 
 <p align="center">
