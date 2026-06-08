@@ -236,7 +236,3 @@ All implemented in pure C. Zero external libraries. ~600 lines total.
 
 ---
 
-
-
----
-
